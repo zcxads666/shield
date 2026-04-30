@@ -23,18 +23,24 @@ type SQLInjector struct {
 
 // Default SQL injection patterns.
 var defaultSQLPatterns = []string{
-	`(?i)(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|EXECUTE|UNION|MERGE)\b.*\b(FROM|INTO|TABLE|DATABASE)\b)`,
-	// SQL comment detection: match -- only when preceded by quote/semicolon/space/start
-	// and followed by space/end-of-line, but NOT when part of a longer dash sequence (3+ dashes)
-	// This avoids false positives on multipart boundaries like ------WebKitFormBoundary--
-	`(?i)(['";\s]|^)--[\s\n]|(?i)(['";\s]|^)--$`,
+	// 1a: UNION SELECT ... FROM/INTO/TABLE/DATABASE (always suspicious in user input)
+	`(?i)\bUNION\b.*\bSELECT\b.*\b(FROM|INTO|TABLE|DATABASE)\b`,
+	// 1b: subquery inside parentheses
+	`(?i)\(\s*(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|EXECUTE|MERGE)\b.*\b(FROM|INTO|TABLE|DATABASE)\b)`,
+	// SQL comment detection: match -- when preceded by quote/semicolon/space/start
+	// and followed by space/newline or end-of-string.
+	// Note: standalone --$ check is done in code to avoid multipart boundary false positives.
+	`(?i)(['";\s]|^)--[\s\n]`,
 	`(?i)/\*|\*/`,
-	`(?i)(\bOR\b|\bAND\b)\s+\d+\s*=\s*\d+`,
-	`(?i)('|")\s*(OR|AND)\s*\1?\s*=\s*\1?`,
+	// 4: OR/AND numeric tautology (handles OR(1)=(1) no-space bypass)
+	`(?i)(\bOR\b|\bAND\b)\s*\(?\s*\d+\s*\)?\s*=\s*\(?\s*\d+\s*\)?`,
+	// 5: quote OR/AND quote tautology (replaces broken backreference pattern)
+	`(?i)('|")\s*(OR|AND)\s*['"]?\s*=\s*['"]?`,
 	`(?i)(\bOR\b|\bAND\b)\s+['"]\w+['"]\s*=\s*['"]\w+['"]`,
 	`(?i);\s*(SELECT|INSERT|UPDATE|DELETE|DROP)`,
 	`(?i)\bUNION\b.*\bSELECT\b`,
 	`(?i)\bSLEEP\s*\(\s*\d+\s*\)`,
+	`(?i)\bpg_sleep\s*\(\s*\d+\s*\)`,
 	`(?i)\bBENCHMARK\s*\(\s*\d+\s*,`,
 	`(?i)LOAD_FILE\s*\(`,
 	`(?i)INFORMATION_SCHEMA`,
@@ -44,6 +50,10 @@ var defaultSQLPatterns = []string{
 	`(?i)(\|\||&&)\s*['"]\d+['"]\s*=\s*['"]\d+['"]`,
 	`(?i)@@version`,
 	`(?i)convert\s*\(\s*int\s*,`,
+	// ORDER BY injection: digit after ORDER BY is suspicious in user input
+	`(?i)\bORDER\s+BY\s+\d+`,
+	// HAVING tautology
+	`(?i)\bHAVING\s+\d+\s*=\s*\d+`,
 	`(?i)(\bOR\b|\bAND\b)\s+['"][^'";=]+['"]?\s*=\s*['"]?[^'";=]+['"]?`,
 	`(?i)(\|\||&&)\s+['"][^'";=]+['"]?\s*=\s*['"]?[^'";=]+['"]?`,
 	// New patterns for no-space and pipe-based tautology bypasses
@@ -115,6 +125,25 @@ func (s *SQLInjector) InspectWithBody(r *http.Request, bodyBytes []byte) (bool, 
 						})
 					}
 					return true, re.String()
+				}
+			}
+			// Additional check: -- at end of string, but skip multipart boundaries
+			if strings.HasSuffix(check, "--") && !strings.Contains(check, "------") {
+				// Ensure it's a real SQL comment, not just something ending in --
+				// Check that -- is preceded by a quote, semicolon, space, or digit
+				if len(check) > 2 {
+					prev := check[len(check)-3]
+					if prev == '\'' || prev == '"' || prev == ';' || prev == ' ' || prev == '\n' || prev == '\t' || (prev >= '0' && prev <= '9') {
+						metrics.Get().IncSQLInjections()
+						if s.logger != nil {
+							s.logger.Warn("sql_injection_detected", map[string]interface{}{
+								"pattern": "sql_comment_suffix",
+								"target":  target,
+								"path":    r.URL.Path,
+							})
+						}
+						return true, "sql_comment_suffix"
+					}
 				}
 			}
 		}
@@ -223,8 +252,17 @@ func urlQueryUnescape(s string) (string, error) {
 
 // normalizeInput decodes common encoding bypasses for detection.
 func normalizeInput(input string) string {
-	// Recursive URL decode (handles double encoding)
 	s := input
+
+	// Decode %uXXXX unicode escapes (ASP/IIS style) FIRST
+	// before url.QueryUnescape, because %u0027 mixed with %20
+	// causes url.QueryUnescape to fail on the %u sequence.
+	s = normReUXXXX.ReplaceAllStringFunc(s, func(m string) string {
+		r, _ := strconv.ParseUint(m[2:], 16, 32)
+		return string(rune(r))
+	})
+
+	// Recursive URL decode (handles double encoding)
 	for i := 0; i < 3; i++ {
 		d, err := url.QueryUnescape(s)
 		if err != nil || d == s {
@@ -238,12 +276,6 @@ func normalizeInput(input string) string {
 
 	// Remove null bytes
 	s = strings.ReplaceAll(s, "\x00", "")
-
-	// Decode %uXXXX unicode escapes (ASP/IIS style)
-	s = normReUXXXX.ReplaceAllStringFunc(s, func(m string) string {
-		r, _ := strconv.ParseUint(m[2:], 16, 32)
-		return string(rune(r))
-	})
 
 	// Decode \xNN hex escapes
 	s = normReHex.ReplaceAllStringFunc(s, func(m string) string {
