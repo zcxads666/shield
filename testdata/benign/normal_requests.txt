@@ -1,0 +1,150 @@
+# 正常 HTTP 请求样本
+# 用途: 验证防御工具不误拦截合法请求（误报率 < 1%）
+
+# ---- 普通 GET 请求 ----
+GET / HTTP/1.1
+Host: example.com
+
+GET /index.html HTTP/1.1
+Host: example.com
+User-Agent: Mozilla/5.0
+
+GET /about HTTP/1.1
+Host: example.com
+Accept: text/html
+
+GET /contact HTTP/1.1
+Host: example.com
+
+GET /products HTTP/1.1
+Host: example.com
+
+GET /products/123 HTTP/1.1
+Host: example.com
+
+GET /search?q=laptop HTTP/1.1
+Host: example.com
+
+GET /search?q=hello+world HTTP/1.1
+Host: example.com
+
+GET /user/profile HTTP/1.1
+Host: example.com
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
+
+GET /api/v1/users?page=1&limit=20 HTTP/1.1
+Host: api.example.com
+Accept: application/json
+
+# ---- 普通 POST 请求 ----
+POST /login HTTP/1.1
+Host: example.com
+Content-Type: application/x-www-form-urlencoded
+
+username=alice&password=MySecureP@ss123
+
+POST /register HTTP/1.1
+Host: example.com
+Content-Type: application/x-www-form-urlencoded
+
+email=alice@example.com&password=MySecureP@ss123&confirm=MySecureP@ss123
+
+POST /contact HTTP/1.1
+Host: example.com
+Content-Type: application/x-www-form-urlencoded
+
+name=Alice&email=alice@example.com&message=Hello, I have a question about your product.
+
+POST /api/v1/posts HTTP/1.1
+Host: api.example.com
+Content-Type: application/json
+Authorization: Bearer token123
+
+{"title": "Introduction to Go", "content": "Go is a statically typed, compiled programming language..."}
+
+POST /api/v1/comments HTTP/1.1
+Host: api.example.com
+Content-Type: application/json
+
+{"post_id": 42, "content": "Great article! Thanks for sharing."}
+
+# ---- 包含特殊字符的合法输入 ----
+POST /search HTTP/1.1
+Host: example.com
+Content-Type: application/x-www-form-urlencoded
+
+q=C++ programming & algorithms
+
+POST /comment HTTP/1.1
+Host: example.com
+Content-Type: application/x-www-form-urlencoded
+
+content=I love using div tags in HTML! Here is some code: printf("Hello, World!\n");
+
+POST /api/code HTTP/1.1
+Host: api.example.com
+Content-Type: application/json
+
+{"language": "python", "code": "def hello():\n    print('Hello, World!')\n"}
+
+POST /api/markdown HTTP/1.1
+Host: api.example.com
+Content-Type: application/json
+
+{"markdown": "# Hello\n\nThis is **bold** and *italic*.\n\n```go\nfmt.Println(\"Hello\")\n```"}
+
+# ---- 文件上传场景 ----
+POST /upload HTTP/1.1
+Host: example.com
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="file"; filename="document.pdf"
+Content-Type: application/pdf
+
+(binary data)
+------WebKitFormBoundary--
+
+# ---- JSON API 场景 ----
+POST /api/v1/orders HTTP/1.1
+Host: api.example.com
+Content-Type: application/json
+
+{
+  "items": [
+    {"product_id": "SKU-001", "quantity": 2, "price": 19.99},
+    {"product_id": "SKU-002", "quantity": 1, "price": 49.99}
+  ],
+  "shipping_address": {
+    "street": "123 Main St, Apt 4B",
+    "city": "New York",
+    "zip": "10001"
+  }
+}
+
+# ---- GraphQL 场景 ----
+POST /graphql HTTP/1.1
+Host: api.example.com
+Content-Type: application/json
+
+{"query": "query GetUser($id: ID!) { user(id: $id) { name email posts { title } } }", "variables": {"id": "123"}}
+
+# ---- RESTful 复杂查询 ----
+GET /api/v1/products?category=electronics&price_min=100&price_max=500&sort=price_desc&filter=brand:Apple,Samsung HTTP/1.1
+Host: api.example.com
+
+# ---- Webhook 回调 ----
+POST /webhooks/payment HTTP/1.1
+Host: example.com
+Content-Type: application/json
+X-Signature: sha256=abcdef1234567890
+
+{"event": "payment.success", "data": {"order_id": "ORD-12345", "amount": 99.99, "currency": "USD"}}
+
+# ---- OAuth 回调 ----
+GET /auth/callback?code=abc123&state=xyz789 HTTP/1.1
+Host: example.com
+
+# ---- 带查询参数的搜索 ----
+GET /search?q=how+to+use+SELECT+statement+in+SQL&category=tutorial HTTP/1.1
+Host: example.com

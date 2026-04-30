@@ -1,0 +1,98 @@
+# SQL 注入攻击样本
+# 来源: OWASP Testing Guide + 公开 payload 数据集
+# 期望: 所有样本均应被防御工具拦截（拦截率 >= 98%）
+
+# ---- 联合查询注入 (Union-Based) ----
+1' UNION SELECT username, password FROM users--
+1' UNION ALL SELECT null, version()--
+' UNION SELECT * FROM information_schema.tables--
+-1 UNION SELECT 1,2,3--
+1' UNION SELECT null, load_file('/etc/passwd')--
+1 UNION SELECT user, password FROM mysql.user--
+' UNION SELECT banner FROM v$version--
+1 UNION SELECT name, sql FROM sqlite_master--
+
+# ---- 报错注入 (Error-Based) ----
+1' AND extractvalue(1, concat(0x7e, (SELECT @@version)))--
+1' AND updatexml(1, concat(0x7e, (SELECT database())), 1)--
+1' AND 1=convert(int, (SELECT @@version))--
+1' AND 1=ctxsys.drithsx.sn(1, (SELECT banner FROM v$version WHERE ROWNUM=1))--
+
+# ---- 布尔盲注 (Boolean-Based Blind) ----
+1' AND 1=1--
+1' AND 1=2--
+1' AND ASCII(SUBSTRING((SELECT password FROM users LIMIT 1),1,1))>64--
+1' AND (SELECT COUNT(*) FROM users)>0--
+1' AND SUBSTRING((SELECT password FROM users LIMIT 1),1,1)='a'--
+
+# ---- 时间盲注 (Time-Based Blind) ----
+1' AND (SELECT * FROM (SELECT(SLEEP(5)))a)--
+1'; WAITFOR DELAY '0:0:5'--
+1' AND pg_sleep(5)--
+1' AND benchmark(10000000, md5('test'))--
+1' AND (SELECT * FROM (SELECT(dbms_pipe.receive_message(('a'),5)) FROM dual))--
+
+# ---- 堆叠查询 (Stacked Queries) ----
+1; DROP TABLE users--
+1; INSERT INTO logs VALUES ('hacked')--
+1; DELETE FROM users WHERE '1'='1'--
+1; UPDATE users SET password='hacked' WHERE username='admin'--
+1; CREATE USER hacker IDENTIFIED BY 'password'--
+
+# ---- 基于注释的绕过 ----
+1/**/UNION/**/SELECT/**/username,password/**/FROM/**/users--
+1'/*!50000UNION*/ SELECT username, password FROM users--
+1'--\nUNION SELECT * FROM users--
+1' /* comment */ UNION SELECT * FROM users--
+
+# ---- 编码与字符绕过 ----
+1%27%20UNION%20SELECT%20*%20FROM%20users--
+1\x27 UNION SELECT * FROM users--
+1%2527 UNION SELECT * FROM users--
+1'+%55%4E%49%4F%4E+SELECT+*+FROM+users--
+
+# ---- 二次编码 ----
+1%2527%2520UNION%2520SELECT%2520*%2520FROM%2520users--
+
+# ---- 宽字节注入 ----
+1%df' UNION SELECT * FROM users--
+1%df%5c' UNION SELECT * FROM users--
+
+# ---- 数字型注入 ----
+1 AND 1=1
+1 AND 1=2
+-1 OR 1=1
+1 AND 1=convert(int,@@version)
+
+# ---- ORDER BY 注入 ----
+1 ORDER BY 1--
+1 ORDER BY 10--
+1 ORDER BY (SELECT @@version)--
+
+# ---- LIMIT / OFFSET 注入 ----
+1 LIMIT 1 OFFSET (SELECT COUNT(*) FROM users)--
+1 LIMIT (SELECT COUNT(*) FROM passwords)--
+
+# ---- INTO OUTFILE ----
+1' UNION SELECT 'hacked' INTO OUTFILE '/var/www/html/shell.php'--
+1' UNION SELECT '<?php eval($_POST[1]);?>' INTO OUTFILE '/tmp/shell.php'--
+
+# ---- 子查询注入 ----
+1 AND (SELECT COUNT(*) FROM information_schema.tables)>0
+1 AND (SELECT LENGTH(password) FROM users LIMIT 1)>5
+1 AND (SELECT SUBSTRING(password,1,1) FROM users LIMIT 1)='a'
+
+# ---- HAVING / GROUP BY 注入 ----
+1' HAVING 1=1--
+1' GROUP BY users.id HAVING 1=1--
+
+# ---- 存储过程调用 ----
+1'; EXEC master..xp_cmdshell 'whoami'--
+1'; EXEC xp_cmdshell 'dir'--
+1'; CALL shell('whoami')--
+
+# ---- NoSQL 风格绕过（在 SQL 环境中） ----
+1' || '1'='1
+1' && '1'='1
+1' OR 'x'='x
+1' AND 'x'='x

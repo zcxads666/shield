@@ -1,0 +1,66 @@
+server:
+  bind_addr: ":18080"
+  read_timeout_ms: 30000
+  write_timeout_ms: 30000
+  max_header_bytes: 1048576
+  admin_bind_addr: ":19090"
+
+proxy:
+  target_url: "http://127.0.0.1:18081"
+  trust_forwarded: false
+
+rate_limit:
+  enabled: true
+  requests_per_second: 50
+  burst_size: 50
+  block_duration_sec: 300
+
+ddos:
+  enabled: true
+  max_connections_per_ip: 50
+  slowloris_timeout_ms: 30000
+  challenge_threshold: 100
+
+sql_inject:
+  enabled: true
+  action: block
+  severity_level: high
+
+xss:
+  enabled: true
+  action: block
+  filter_response: false
+
+brute_force:
+  enabled: true
+  max_failures: 5
+  window_sec: 60
+  block_duration_sec: 600
+  protected_paths:
+    - /login
+    - /api/auth
+    - /admin
+  status_codes:
+    - 401
+    - 403
+
+blacklist:
+  enabled: true
+  persist_path: "./data/blacklist.json"
+  auto_blacklist: true
+
+log:
+  level: warn
+  format: json
+  output_path: "./logs/shield.log"
+  max_size_mb: 100
+  max_backups: 7
+  max_age_days: 30
+
+alert:
+  enabled: false
+
+rules:
+  rules_path: "./data/rules.yaml"
+  hot_reload: true
+  reload_interval_sec: 3

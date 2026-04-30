@@ -1,0 +1,39 @@
+# 路径遍历攻击样本
+# 期望: 防御工具应能检测并拦截包含目录穿越特征的输入
+
+# ---- 基础目录穿越 ----
+../../../etc/passwd
+../../windows/win.ini
+..\..\..\windows\system32\config\sam
+
+# ---- 编码绕过 ----
+%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd
+..%2f..%2f..%2fetc%2fpasswd
+%252e%252e%252fetc%252fpasswd
+..%252f..%252f..%252fetc%252fpasswd
+
+# ---- 双重编码 ----
+%252e%252e%252f
+..%c0%af..%c0%af..%c0%afetc/passwd
+..%c1%9c..%c1%9c..%c1%9cwindows%5Cwin.ini
+
+# ---- 空字节截断 ----
+file.jpg%00../../../etc/passwd
+image.png\x00..\..\..\windows\win.ini
+
+# ---- 特殊路径 ----
+....//....//....//etc/passwd
+....\\....\\....\\windows\\win.ini
+..../..../..../etc/passwd
+....\..\..\windows\win.ini
+
+# ---- 绝对路径尝试 ----
+/etc/passwd
+C:\windows\system32\config\sam
+/proc/self/environ
+/var/www/html/config.php
+
+# ---- 利用 URL 规范化差异 ----
+..;/..;/..;/etc/passwd
+..%00/../etc/passwd
+..%0d/..%0d/..%0d/etc/passwd

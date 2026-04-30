@@ -1,0 +1,10 @@
+time,total_req,ok_200,blocked_429,blocked_403,errors,shield_cpu,shield_rss,shield_threads,normal_ok,normal_latency_ms
+1,56,13,0
+0,0
+0,12,51.7,83424,23,0,387
+2,56,3,0
+0,0
+0,12,49.2,81480,23,2,399
+3,61,6,0
+0,0
+0,22,50.3,83588,23,0,3062

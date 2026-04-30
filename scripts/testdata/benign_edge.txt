@@ -1,0 +1,48 @@
+# 边界正常输入样本
+# 包含容易被误判为攻击的合法输入
+
+# ---- 包含 SQL 关键字的合法文本 ----
+SELECT * FROM candidates WHERE name = 'Alice' AND status = 'active'
+UPDATE users SET last_login = NOW() WHERE id = 42
+DELETE FROM sessions WHERE expired = true
+INSERT INTO audit_log VALUES (1, 'login', '192.168.1.1')
+DROP TABLE IF EXISTS temp_table
+CREATE INDEX idx_email ON users(email)
+ALTER TABLE users ADD COLUMN phone VARCHAR(20)
+
+# ---- 技术文档/教程内容 ----
+In SQL, you can use UNION to combine results from multiple queries.
+To prevent SQL injection, always use parameterized queries like: SELECT * FROM users WHERE id = ?
+The HAVING clause is used with GROUP BY to filter groups.
+
+# ---- 包含路径的合法输入 ----
+/usr/local/bin/go
+/var/log/nginx/access.log
+C:\Program Files\Go\bin\go.exe
+../assets/logo.png
+../../images/photo.jpg
+
+# ---- 代码片段 ----
+#include <stdio.h>
+int main() { printf("Hello, World!\n"); return 0; }
+
+<script src="/app.js"></script>
+<link rel="stylesheet" href="/style.css">
+
+# ---- URL 和特殊字符 ----
+https://example.com/search?q=hello&page=1
+mailto:test@example.com?subject=Hello&body=World
+file:///etc/hosts
+
+# ---- 数学表达式 ----
+1 < 2 && 3 > 1
+a <= b || c >= d
+x != y && z == w
+
+# ---- 正则表达式 ----
+^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+\d{3}-\d{2}-\d{4}
+
+# ---- 包含 event 关键字的 HTML ----
+<div onclick="handleClick()">Click me</div>
+<button onmouseover="showTooltip()">Hover</button>

