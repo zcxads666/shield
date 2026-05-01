@@ -1,0 +1,5 @@
+bin/shield
+shield
+shield.log
+logs/
+data/blacklist.json
