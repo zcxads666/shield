@@ -1,5 +1,5 @@
 bin/shield
 shield
 shield.log
-logs/
-data/blacklist.json
+runtime/logs/
+runtime/data/blacklist.json

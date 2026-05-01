@@ -11,13 +11,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/shield/shield/internal/admin"
-	"github.com/shield/shield/internal/blacklist"
-	"github.com/shield/shield/internal/config"
-	"github.com/shield/shield/internal/logger"
-	"github.com/shield/shield/internal/metrics"
-	"github.com/shield/shield/internal/proxy"
-	"github.com/shield/shield/internal/rules"
+	"github.com/shield/shield/internal/handler"
+	"github.com/shield/shield/internal/service/rules"
+	"github.com/shield/shield/internal/storage/blacklist"
+	"github.com/shield/shield/pkg/config"
+	"github.com/shield/shield/pkg/logger"
+	"github.com/shield/shield/pkg/metrics"
 )
 
 func main() {
@@ -67,7 +66,7 @@ func runServer(cfg *config.Config, lg *logger.Logger, bl *blacklist.Manager, re 
 	}
 
 	// Start admin server
-	adm := admin.NewServer(cfg, bl)
+	adm := handler.NewAdminServer(cfg, bl)
 	adminSrv := &http.Server{
 		Addr:    cfg.Server.AdminBindAddr,
 		Handler: adm.Handler(),
@@ -93,7 +92,7 @@ func runServer(cfg *config.Config, lg *logger.Logger, bl *blacklist.Manager, re 
 		os.Exit(0)
 	}()
 
-	if err := proxy.Run(cfg, lg, bl, re); err != nil {
+	if err := handler.RunProxy(cfg, lg, bl, re); err != nil {
 		lg.Error("proxy_run_error", map[string]interface{}{"error": err.Error()})
 		os.Exit(1)
 	}
