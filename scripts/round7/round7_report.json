@@ -1,0 +1,228 @@
+{
+  "sql_injection": {
+    "total": 22,
+    "blocked": 22,
+    "penetrated": 0,
+    "misidentified": 0,
+    "block_rate": 100.0,
+    "accuracy": 100.0,
+    "penetrated_details": [],
+    "misidentified_details": [],
+    "category_stats": {
+      "union_based": {
+        "total": 5,
+        "blocked": 5,
+        "penetrated": 0,
+        "misidentified": 0
+      },
+      "error_based": {
+        "total": 2,
+        "blocked": 2,
+        "penetrated": 0,
+        "misidentified": 0
+      },
+      "boolean_blind": {
+        "total": 2,
+        "blocked": 2,
+        "penetrated": 0,
+        "misidentified": 0
+      },
+      "time_blind": {
+        "total": 2,
+        "blocked": 2,
+        "penetrated": 0,
+        "misidentified": 0
+      },
+      "comment_bypass": {
+        "total": 2,
+        "blocked": 2,
+        "penetrated": 0,
+        "misidentified": 0
+      },
+      "encoding_bypass": {
+        "total": 2,
+        "blocked": 2,
+        "penetrated": 0,
+        "misidentified": 0
+      },
+      "logic_or_nospace": {
+        "total": 4,
+        "blocked": 4,
+        "penetrated": 0,
+        "misidentified": 0
+      },
+      "post_method": {
+        "total": 3,
+        "blocked": 3,
+        "penetrated": 0,
+        "misidentified": 0
+      }
+    }
+  },
+  "xss": {
+    "total": 14,
+    "blocked": 14,
+    "penetrated": 0,
+    "misidentified": 0,
+    "block_rate": 100.0,
+    "accuracy": 100.0,
+    "penetrated_details": [],
+    "misidentified_details": [],
+    "category_stats": {
+      "反射型": {
+        "total": 10,
+        "blocked": 10,
+        "penetrated": 0,
+        "misidentified": 0
+      },
+      "事件处理器绕过": {
+        "total": 1,
+        "blocked": 1,
+        "penetrated": 0,
+        "misidentified": 0
+      },
+      "DOM型": {
+        "total": 1,
+        "blocked": 1,
+        "penetrated": 0,
+        "misidentified": 0
+      },
+      "存储型": {
+        "total": 1,
+        "blocked": 1,
+        "penetrated": 0,
+        "misidentified": 0
+      },
+      "编码绕过": {
+        "total": 1,
+        "blocked": 1,
+        "penetrated": 0,
+        "misidentified": 0
+      }
+    }
+  },
+  "webshell_upload": {
+    "total": 15,
+    "blocked": 15,
+    "penetrated": 0,
+    "misidentified": 0,
+    "block_rate": 100.0,
+    "accuracy": 100.0,
+    "penetrated_details": [],
+    "misidentified_details": [],
+    "category_stats": {
+      "php_shell": {
+        "total": 5,
+        "blocked": 5,
+        "penetrated": 0,
+        "misidentified": 0
+      },
+      "jsp_shell": {
+        "total": 2,
+        "blocked": 2,
+        "penetrated": 0,
+        "misidentified": 0
+      },
+      "double_extension": {
+        "total": 3,
+        "blocked": 3,
+        "penetrated": 0,
+        "misidentified": 0
+      },
+      "image_horse": {
+        "total": 3,
+        "blocked": 3,
+        "penetrated": 0,
+        "misidentified": 0
+      },
+      "direct_upload": {
+        "total": 2,
+        "blocked": 2,
+        "penetrated": 0,
+        "misidentified": 0
+      }
+    }
+  },
+  "cc_attack": {
+    "normal_requests": {
+      "total": 20,
+      "blocked": 0,
+      "avg_latency": 0.0029813
+    },
+    "cc_same_url": {
+      "total": 100,
+      "blocked": 20,
+      "first_block_idx": 100,
+      "avg_latency": 0.0023371333333333335,
+      "detected_types": [
+        "CC攻击"
+      ],
+      "correct_identification": 20
+    },
+    "cc_concurrent": {
+      "total": 50,
+      "blocked": 0,
+      "avg_latency": 0.02398068,
+      "detected_types": []
+    }
+  },
+  "ddos": {
+    "threshold_flood": {
+      "total": 150,
+      "blocked": 50,
+      "avg_latency": 0.0022385866666666666,
+      "detected_types": [
+        "CC攻击"
+      ],
+      "correct_identification": 50
+    },
+    "burst_flood": {
+      "total": 300,
+      "blocked": 200,
+      "avg_latency": 0.06591394,
+      "detected_types": [
+        "CC攻击"
+      ],
+      "correct_identification": 200
+    }
+  },
+  "brute_force": {
+    "login_bruteforce": {
+      "total": 10,
+      "blocked": 0,
+      "detected_types": [],
+      "correct_identification": 0
+    },
+    "api_bruteforce": {
+      "total": 8,
+      "blocked": 0,
+      "detected_types": [],
+      "correct_identification": 0
+    },
+    "dir_scan": {
+      "total": 15,
+      "blocked": 0,
+      "detected_types": [],
+      "correct_identification": 0
+    }
+  },
+  "false_positive": {
+    "total": 10,
+    "fp_count": 0,
+    "fp_rate": 0.0,
+    "fp_details": [],
+    "avg_latency": 0.0031755
+  },
+  "acceptance": {
+    "sql_pass": true,
+    "xss_pass": true,
+    "shell_pass": true,
+    "ddos_pass": true,
+    "brute_pass": false,
+    "fp_pass": true,
+    "sql_acc_pass": true,
+    "xss_acc_pass": true,
+    "shell_acc_pass": true,
+    "overall_pass": false
+  }
+}

@@ -15,7 +15,7 @@ proxy:
 rate_limit:
   enabled: true
   requests_per_second: 100
-  burst_size: 150
+  burst_size: 300
   block_duration_sec: 300
 
 ddos:
@@ -23,6 +23,10 @@ ddos:
   max_connections_per_ip: 1000
   slowloris_timeout_ms: 30000
   challenge_threshold: 500
+cc:
+  enabled: true
+  max_requests: 100
+  window_sec: 60
 
 sql_inject:
   enabled: true
@@ -33,6 +37,11 @@ xss:
   enabled: true
   action: block
   filter_response: false
+
+upload:
+  enabled: true
+  action: block
+  max_file_size_mb: 32
 
 brute_force:
   enabled: true

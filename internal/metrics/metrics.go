@@ -13,6 +13,8 @@ type Metrics struct {
 	ActiveConnections int64
 	SQLInjections     uint64
 	XSSAttempts       uint64
+	WebShellUploads   uint64
+	CCBlocks          uint64
 	BruteForceBlocks  uint64
 	DDoSBlocks        uint64
 	BlacklistedIPs    uint64
@@ -49,6 +51,12 @@ func (m *Metrics) IncSQLInjections() { atomic.AddUint64(&m.SQLInjections, 1) }
 // IncXSSAttempts increments XSS attempt count.
 func (m *Metrics) IncXSSAttempts() { atomic.AddUint64(&m.XSSAttempts, 1) }
 
+// IncWebShellUploads increments web shell upload detection count.
+func (m *Metrics) IncWebShellUploads() { atomic.AddUint64(&m.WebShellUploads, 1) }
+
+// IncCCBlocks increments CC attack block count.
+func (m *Metrics) IncCCBlocks() { atomic.AddUint64(&m.CCBlocks, 1) }
+
 // IncBruteForceBlocks increments brute force block count.
 func (m *Metrics) IncBruteForceBlocks() { atomic.AddUint64(&m.BruteForceBlocks, 1) }
 
@@ -67,6 +75,8 @@ func (m *Metrics) Snapshot() Metrics {
 		ActiveConnections: atomic.LoadInt64(&m.ActiveConnections),
 		SQLInjections:     atomic.LoadUint64(&m.SQLInjections),
 		XSSAttempts:       atomic.LoadUint64(&m.XSSAttempts),
+		WebShellUploads:   atomic.LoadUint64(&m.WebShellUploads),
+		CCBlocks:          atomic.LoadUint64(&m.CCBlocks),
 		BruteForceBlocks:  atomic.LoadUint64(&m.BruteForceBlocks),
 		DDoSBlocks:        atomic.LoadUint64(&m.DDoSBlocks),
 		BlacklistedIPs:    atomic.LoadUint64(&m.BlacklistedIPs),

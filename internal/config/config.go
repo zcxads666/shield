@@ -14,9 +14,11 @@ type Config struct {
 	Proxy      ProxyConfig      `yaml:"proxy"`
 	RateLimit  RateLimitConfig  `yaml:"rate_limit"`
 	DDoS       DDoSConfig       `yaml:"ddos"`
+	CC         CCConfig         `yaml:"cc"`
 	SQLInject  SQLInjectConfig  `yaml:"sql_inject"`
 	XSS        XSSConfig        `yaml:"xss"`
 	BruteForce BruteForceConfig `yaml:"brute_force"`
+	Upload     UploadConfig     `yaml:"upload"`
 	Blacklist  BlacklistConfig  `yaml:"blacklist"`
 	Log        LogConfig        `yaml:"log"`
 	Alert      AlertConfig      `yaml:"alert"`
@@ -53,12 +55,19 @@ type RateLimitConfig struct {
 	BlockDurationSec  int  `yaml:"block_duration_sec"`
 }
 
-// DDoSConfig defines DDoS / CC defense settings.
+// DDoSConfig defines DDoS defense settings.
 type DDoSConfig struct {
 	Enabled             bool `yaml:"enabled"`
 	MaxConnectionsPerIP int  `yaml:"max_connections_per_ip"`
 	SlowlorisTimeoutMs  int  `yaml:"slowloris_timeout_ms"`
 	ChallengeThreshold  int  `yaml:"challenge_threshold"`
+}
+
+// CCConfig defines CC (Challenge Collapsar) attack detection settings.
+type CCConfig struct {
+	Enabled         bool `yaml:"enabled"`
+	MaxRequests     int  `yaml:"max_requests"`
+	WindowSec       int  `yaml:"window_sec"`
 }
 
 // SQLInjectConfig defines SQL injection detection settings.
@@ -73,6 +82,13 @@ type XSSConfig struct {
 	Enabled        bool   `yaml:"enabled"`
 	Action         string `yaml:"action"`
 	FilterResponse bool   `yaml:"filter_response"`
+}
+
+// UploadConfig defines web shell upload detection settings.
+type UploadConfig struct {
+	Enabled       bool   `yaml:"enabled"`
+	Action        string `yaml:"action"`
+	MaxFileSizeMB int    `yaml:"max_file_size_mb"`
 }
 
 // BruteForceConfig defines brute force / scan protection.
@@ -215,6 +231,12 @@ func (m *Manager) setDefault(cfg *Config) {
 	if cfg.DDoS.SlowlorisTimeoutMs == 0 {
 		cfg.DDoS.SlowlorisTimeoutMs = 30000
 	}
+	if cfg.CC.MaxRequests == 0 {
+		cfg.CC.MaxRequests = 100
+	}
+	if cfg.CC.WindowSec == 0 {
+		cfg.CC.WindowSec = 60
+	}
 	if cfg.BruteForce.MaxFailures == 0 {
 		cfg.BruteForce.MaxFailures = 5
 	}
@@ -244,5 +266,11 @@ func (m *Manager) setDefault(cfg *Config) {
 	}
 	if cfg.Rules.ReloadIntervalSec == 0 {
 		cfg.Rules.ReloadIntervalSec = 3
+	}
+	if cfg.Upload.Action == "" {
+		cfg.Upload.Action = "block"
+	}
+	if cfg.Upload.MaxFileSizeMB == 0 {
+		cfg.Upload.MaxFileSizeMB = 32
 	}
 }

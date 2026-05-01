@@ -1,0 +1,84 @@
+{
+  "sql_injection": {
+    "total": 21,
+    "blocked": 16,
+    "penetrated": 5,
+    "block_rate": 76.19047619047619,
+    "penetrated_details": [
+      {
+        "name": "Unicode-%u0027-OR",
+        "payload": "1%u0027%20OR%20%271%27=%271",
+        "status": 200,
+        "method": "GET"
+      },
+      {
+        "name": "Unicode-%u0027-UNION",
+        "payload": "1%u0027%20UNION%20SELECT%20*%20FROM%20users--",
+        "status": 200,
+        "method": "GET"
+      },
+      {
+        "name": "无空格-括号绕过",
+        "payload": "1'OR(1)=(1)",
+        "status": 200,
+        "method": "GET"
+      },
+      {
+        "name": "无空格-括号绕过#",
+        "payload": "1'OR(1)=(1)%23",
+        "status": 200,
+        "method": "GET"
+      },
+      {
+        "name": "无空格-AND括号",
+        "payload": "1'AND(1)=(1)",
+        "status": 200,
+        "method": "GET"
+      }
+    ],
+    "avg_latency": 0.002284809523809524
+  },
+  "cc_attack": {
+    "normal_requests": {
+      "total": 20,
+      "blocked": 0,
+      "avg_latency": 0.00335645
+    },
+    "cc_same_url": {
+      "total": 110,
+      "blocked": 10,
+      "first_block_idx": 100,
+      "avg_latency": 0.0027233727272727272
+    },
+    "cc_multi_url": {
+      "total": 150,
+      "blocked": 0,
+      "avg_latency": 0.002797486666666667
+    },
+    "cc_concurrent": {
+      "total": 50,
+      "blocked": 0,
+      "avg_latency": 0.0182897
+    }
+  },
+  "false_positive": {
+    "total": 8,
+    "fp_count": 2,
+    "fp_rate": 25.0,
+    "fp_details": [
+      {
+        "name": "正常SQL教程-UNION",
+        "expected": false,
+        "actual": true,
+        "status": 403
+      },
+      {
+        "name": "正常SQL-SELECT FROM",
+        "expected": false,
+        "actual": true,
+        "status": 403
+      }
+    ],
+    "avg_latency": 0.0030715
+  }
+}

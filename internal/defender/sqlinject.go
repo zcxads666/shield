@@ -30,7 +30,7 @@ var defaultSQLPatterns = []string{
 	// SQL comment detection: match -- when preceded by quote/semicolon/space/start
 	// and followed by space/newline or end-of-string.
 	// Note: standalone --$ check is done in code to avoid multipart boundary false positives.
-	`(?i)(['";\s]|^)--[\s\n]`,
+	`(?i)(['";]|^)--[\n]`,`(?i)(['";]|^)--\s+[a-zA-Z]`,
 	`(?i)/\*|\*/`,
 	// 4: OR/AND numeric tautology (handles OR(1)=(1) no-space bypass)
 	`(?i)(\bOR\b|\bAND\b)\s*\(?\s*\d+\s*\)?\s*=\s*\(?\s*\d+\s*\)?`,
@@ -62,6 +62,8 @@ var defaultSQLPatterns = []string{
 	`(?i)[a-zA-Z]'\s*(OR|AND|\|\||&&)\s*'\d['"]\s*=\s*['"]\d`,
 	`(?i)(?:^|[^a-zA-Z0-9_])[a-zA-Z]{2,}'\s*(OR|AND|\|\||&&)\s*'[a-zA-Z0-9_]{1,3}'\s*=\s*'[a-zA-Z0-9_]{1,3}`,
 	`(?i)(?:^|[^a-zA-Z0-9_])[a-zA-Z]'\s*(OR|AND|\|\||&&)\s*'[a-zA-Z0-9_]['"]\s*=\s*['"][a-zA-Z0-9_]`,
+	// Pattern for function-call tautologies like 1' AND 1=eval(1)--
+	`(?i)(\bOR\b|\bAND\b)\s+\d+\s*=\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\(`,
 }
 
 // NewSQLInjector creates a SQL injection detector.

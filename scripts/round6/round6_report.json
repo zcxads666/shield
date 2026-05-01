@@ -1,0 +1,178 @@
+{
+  "sql_injection": {
+    "total": 80,
+    "blocked": 80,
+    "penetrated": 0,
+    "block_rate": 100.0,
+    "pass_rate": 100.0,
+    "avg_latency": 0.00169575,
+    "penetrated_details": [],
+    "category_stats": {
+      "union_based": {
+        "total": 9,
+        "blocked": 9,
+        "penetrated": 0
+      },
+      "error_based": {
+        "total": 4,
+        "blocked": 4,
+        "penetrated": 0
+      },
+      "boolean_blind": {
+        "total": 5,
+        "blocked": 5,
+        "penetrated": 0
+      },
+      "time_blind": {
+        "total": 5,
+        "blocked": 5,
+        "penetrated": 0
+      },
+      "stacked_queries": {
+        "total": 5,
+        "blocked": 5,
+        "penetrated": 0
+      },
+      "comment_bypass": {
+        "total": 4,
+        "blocked": 4,
+        "penetrated": 0
+      },
+      "encoding_bypass": {
+        "total": 4,
+        "blocked": 4,
+        "penetrated": 0
+      },
+      "double_encoding": {
+        "total": 1,
+        "blocked": 1,
+        "penetrated": 0
+      },
+      "widebyte": {
+        "total": 2,
+        "blocked": 2,
+        "penetrated": 0
+      },
+      "numeric": {
+        "total": 4,
+        "blocked": 4,
+        "penetrated": 0
+      },
+      "order_limit": {
+        "total": 4,
+        "blocked": 4,
+        "penetrated": 0
+      },
+      "having_groupby": {
+        "total": 3,
+        "blocked": 3,
+        "penetrated": 0
+      },
+      "stored_proc": {
+        "total": 4,
+        "blocked": 4,
+        "penetrated": 0
+      },
+      "logic_or_nospace": {
+        "total": 12,
+        "blocked": 12,
+        "penetrated": 0
+      },
+      "post_method": {
+        "total": 6,
+        "blocked": 6,
+        "penetrated": 0
+      },
+      "boundary": {
+        "total": 8,
+        "blocked": 8,
+        "penetrated": 0
+      }
+    }
+  },
+  "cc_attack": {
+    "normal_requests": {
+      "total": 20,
+      "blocked": 0,
+      "avg_latency": 0.00286895
+    },
+    "cc_same_url": {
+      "total": 120,
+      "blocked": 20,
+      "first_block_idx": 100,
+      "avg_latency": 0.0026129666666666667
+    },
+    "cc_multi_url": {
+      "total": 150,
+      "blocked": 0,
+      "avg_latency": 0.00297842
+    },
+    "cc_concurrent": {
+      "total": 50,
+      "blocked": 0,
+      "avg_latency": 0.0194335
+    },
+    "cc_step": [
+      {
+        "concurrency": 5,
+        "total": 10,
+        "blocked": 0,
+        "avg_latency": 0.0070454
+      },
+      {
+        "concurrency": 10,
+        "total": 20,
+        "blocked": 0,
+        "avg_latency": 0.0127679
+      },
+      {
+        "concurrency": 20,
+        "total": 40,
+        "blocked": 0,
+        "avg_latency": 0.014488375
+      },
+      {
+        "concurrency": 50,
+        "total": 100,
+        "blocked": 70,
+        "avg_latency": 0.01899739
+      },
+      {
+        "concurrency": 100,
+        "total": 200,
+        "blocked": 200,
+        "avg_latency": 0.025862705
+      }
+    ]
+  },
+  "xss": {
+    "total": 8,
+    "blocked": 8,
+    "penetrated": 0,
+    "block_rate": 100.0,
+    "avg_latency": 0.002035125,
+    "penetrated_details": []
+  },
+  "false_positive": {
+    "total": 12,
+    "fp_count": 1,
+    "fp_rate": 8.333333333333332,
+    "fp_details": [
+      {
+        "name": "fp_normal_get",
+        "expected_block": false,
+        "actual_block": true,
+        "status": 200,
+        "snippet": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Shield WAF Test Page</title>\n    <style>\n      "
+      }
+    ],
+    "avg_latency": 0.0031333333333333335
+  },
+  "acceptance": {
+    "sql_pass": true,
+    "fp_pass": true,
+    "cc_pass": true,
+    "xss_pass": true,
+    "overall_pass": true
+  }
+}

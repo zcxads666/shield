@@ -93,6 +93,7 @@ func (d *DDoSDefender) WrapHandler(next http.Handler) http.Handler {
 		}
 		ip := blacklist.GetClientIP(r.RemoteAddr, r.Header, d.trustForwarded)
 		if !d.Allow(ip) {
+			w.Header().Set("X-Block-Reason", "ddos")
 			http.Error(w, "429 Too Many Requests", http.StatusTooManyRequests)
 			return
 		}

@@ -43,6 +43,8 @@ var defaultXSSPatterns = []string{
 	`(?i)<\s*svg[^>]*>`,
 	`(?i)@import\s+['"]javascript:`,
 	`(?i)\{\{.*constructor.*\}\}`,
+	`(?i)\{\{.*[\+\-\*/%].*\}\}`,
+	`(?i)\{\{\{.*[\+\-\*/%].*\}\}\}`,
 	`(?i)\$\{[^}]*alert`,
 	`(?i)#\{[^}]*alert`,
 	`(?i)<%=[^%]*alert`,

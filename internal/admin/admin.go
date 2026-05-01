@@ -44,6 +44,8 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		"active_connections": m.ActiveConnections,
 		"sql_injections":     m.SQLInjections,
 		"xss_attempts":       m.XSSAttempts,
+		"webshell_uploads":   m.WebShellUploads,
+		"cc_blocks":          m.CCBlocks,
 		"brute_force_blocks": m.BruteForceBlocks,
 		"ddos_blocks":        m.DDoSBlocks,
 		"blacklisted_ips":    m.BlacklistedIPs,

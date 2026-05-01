@@ -138,4 +138,10 @@ func TestDefaults_All(t *testing.T) {
 	if cfg.Rules.ReloadIntervalSec != 3 {
 		t.Errorf("unexpected reload interval: %d", cfg.Rules.ReloadIntervalSec)
 	}
+	if cfg.CC.MaxRequests != 100 {
+		t.Errorf("unexpected cc max requests: %d", cfg.CC.MaxRequests)
+	}
+	if cfg.CC.WindowSec != 60 {
+		t.Errorf("unexpected cc window: %d", cfg.CC.WindowSec)
+	}
 }

@@ -1,0 +1,68 @@
+{
+  "sql_injection": {
+    "total": 18,
+    "blocked": 15,
+    "penetrated": 3,
+    "block_rate": 83.33333333333334,
+    "pass_rate": 83.33333333333334,
+    "avg_latency": 0.0018993333333333334,
+    "penetrated_details": [
+      {
+        "name": "Unicode编码 - %u0027",
+        "payload": "1%u0027%20OR%20%271%27=%271",
+        "status": 404,
+        "snippet": "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\"\n        \"http://www.w3.org/TR/html4/strict.dtd\">\n<html>\n    <head>\n        <meta http-equiv=\"Content-Type\" content=\"text/html;charset=utf-8\">\n        "
+      },
+      {
+        "name": "Unicode编码 - %u0027 UNION",
+        "payload": "1%u0027%20UNION%20SELECT%20*%20FROM%20users--",
+        "status": 404,
+        "snippet": "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\"\n        \"http://www.w3.org/TR/html4/strict.dtd\">\n<html>\n    <head>\n        <meta http-equiv=\"Content-Type\" content=\"text/html;charset=utf-8\">\n        "
+      },
+      {
+        "name": "无空格 - 括号绕过",
+        "payload": "1'OR(1)=(1)",
+        "status": 404,
+        "snippet": "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\"\n        \"http://www.w3.org/TR/html4/strict.dtd\">\n<html>\n    <head>\n        <meta http-equiv=\"Content-Type\" content=\"text/html;charset=utf-8\">\n        "
+      }
+    ]
+  },
+  "cc_attack": {
+    "normal_requests": {
+      "total": 20,
+      "blocked": 0,
+      "avg_latency": 0.00289165
+    },
+    "cc_same_url": {
+      "total": 120,
+      "blocked": 20,
+      "first_block_idx": 100,
+      "avg_latency": 0.0028005666666666667
+    },
+    "cc_multi_url": {
+      "total": 150,
+      "blocked": 0,
+      "avg_latency": 0.00285694
+    },
+    "cc_concurrent": {
+      "total": 50,
+      "blocked": 0,
+      "avg_latency": 0.01443674
+    }
+  },
+  "false_positive": {
+    "total": 8,
+    "fp_count": 1,
+    "fp_rate": 12.5,
+    "fp_details": [
+      {
+        "name": "正常SQL教程内容",
+        "expected_block": false,
+        "actual_block": true,
+        "status": 403,
+        "snippet": "403 Forbidden\n"
+      }
+    ],
+    "avg_latency": 0.003029875
+  }
+}

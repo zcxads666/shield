@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/shield/shield/internal/blacklist"
@@ -25,8 +26,10 @@ type Server struct {
 	logger        *logger.Logger
 	blacklist     *blacklist.Manager
 	dDOS          *defender.DDoSDefender
+	cc            *defender.CCDetector
 	sqlInject     *defender.SQLInjector
 	xss           *defender.XSSDetector
+	webShell      *defender.WebShellDetector
 	bruteForce    *defender.BruteForceDefender
 	rules         *rules.Engine
 	semaphore     *PrioritySemaphore
@@ -70,8 +73,16 @@ func NewServer(cfg *config.Config, log *logger.Logger, bl *blacklist.Manager, rl
 		cfg.Proxy.TrustForwarded,
 		log,
 	)
+	s.cc = defender.NewCCDetector(
+		cfg.CC.Enabled,
+		cfg.CC.MaxRequests,
+		cfg.CC.WindowSec,
+		cfg.Proxy.TrustForwarded,
+		log,
+	)
 	s.sqlInject = defender.NewSQLInjector(cfg.SQLInject.Enabled, cfg.SQLInject.Action, log)
 	s.xss = defender.NewXSSDetector(cfg.XSS.Enabled, cfg.XSS.Action, cfg.XSS.FilterResponse, log)
+	s.webShell = defender.NewWebShellDetector(cfg.Upload.Enabled, cfg.Upload.Action, log)
 	s.bruteForce = defender.NewBruteForceDefender(
 		cfg.BruteForce.Enabled,
 		cfg.BruteForce.MaxFailures,
@@ -124,20 +135,32 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	// 1. Blacklist check
 	if s.cfg.Blacklist.Enabled && s.blacklist.IsBlocked(ip) {
 		metrics.Get().IncBlockedRequests()
-		s.logger.Warn("request_blocked_blacklist", map[string]interface{}{"ip": ip, "path": r.URL.Path})
+		w.Header().Set("X-Block-Reason", "blacklist")
+		s.logger.Warn("request_blocked_blacklist", map[string]interface{}{"ip": ip, "path": r.URL.Path, "attack_type": "blacklist"})
 		http.Error(w, "403 Forbidden", http.StatusForbidden)
 		return
 	}
 
-	// 2. Brute force check
-	if s.cfg.BruteForce.Enabled && s.bruteForce.ShouldBlock(ip, r.URL.Path) {
+	// 2. CC attack check (application-layer, same URL high frequency)
+	if s.cfg.CC.Enabled && !s.cc.Allow(r) {
 		metrics.Get().IncBlockedRequests()
-		s.logger.Warn("request_blocked_bruteforce", map[string]interface{}{"ip": ip, "path": r.URL.Path})
+		metrics.Get().IncCCBlocks()
+		w.Header().Set("X-Block-Reason", "cc_attack")
+		s.logger.Warn("request_blocked_cc", map[string]interface{}{"ip": ip, "path": r.URL.Path, "attack_type": "cc_attack"})
 		http.Error(w, "429 Too Many Requests", http.StatusTooManyRequests)
 		return
 	}
 
-	// 3. Custom rules engine
+	// 3. Brute force check
+	if s.cfg.BruteForce.Enabled && s.bruteForce.ShouldBlock(ip, r.URL.Path) {
+		metrics.Get().IncBlockedRequests()
+		w.Header().Set("X-Block-Reason", "brute_force")
+		s.logger.Warn("request_blocked_bruteforce", map[string]interface{}{"ip": ip, "path": r.URL.Path, "attack_type": "brute_force"})
+		http.Error(w, "429 Too Many Requests", http.StatusTooManyRequests)
+		return
+	}
+
+	// 4. Custom rules engine
 	if s.rules.Count() > 0 {
 		targets := map[string]string{
 			"url":    r.URL.String(),
@@ -151,6 +174,8 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			s.logger.Warn("rule_matched", map[string]interface{}{"rule_id": rule.ID, "ip": ip, "path": r.URL.Path})
 			if rule.Action == "block" {
 				metrics.Get().IncBlockedRequests()
+				w.Header().Set("X-Block-Reason", "rule_matched")
+				s.logger.Warn("request_blocked_rule", map[string]interface{}{"rule_id": rule.ID, "ip": ip, "path": r.URL.Path, "attack_type": "rule_matched"})
 				http.Error(w, "403 Forbidden", http.StatusForbidden)
 				return
 			}
@@ -162,26 +187,86 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 	r.ContentLength = int64(len(bodyBytes))
 
-	// 4. SQL injection check
-	if s.cfg.SQLInject.Enabled {
-		if matched, pattern := s.sqlInject.InspectWithBody(r, bodyBytes); matched {
-			if s.cfg.SQLInject.Action == "block" {
-				metrics.Get().IncBlockedRequests()
-				s.logger.Warn("request_blocked_sqlinject", map[string]interface{}{"ip": ip, "pattern": pattern, "path": r.URL.Path})
-				http.Error(w, "403 Forbidden", http.StatusForbidden)
-				return
+	// Check if this is an upload request (multipart or has X-Filename header)
+	isUpload := strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") || r.Header.Get("X-Filename") != ""
+
+	// For upload requests, check web shell FIRST to avoid XSS/SQL false positives
+	// on multipart body content. For non-upload requests, keep original order.
+	if isUpload {
+		// 5a. Web shell upload check (first for uploads)
+		if s.cfg.Upload.Enabled {
+			if matched, pattern := s.webShell.InspectRequestWithBody(r, bodyBytes); matched {
+				if s.cfg.Upload.Action == "block" {
+					metrics.Get().IncBlockedRequests()
+					w.Header().Set("X-Block-Reason", "webshell_upload")
+					s.logger.Warn("request_blocked_webshell", map[string]interface{}{"ip": ip, "pattern": pattern, "path": r.URL.Path, "attack_type": "webshell_upload"})
+					http.Error(w, "403 Forbidden", http.StatusForbidden)
+					return
+				}
 			}
 		}
-	}
+		// 5b. SQL injection check
+		if s.cfg.SQLInject.Enabled {
+			if matched, pattern := s.sqlInject.InspectWithBody(r, bodyBytes); matched {
+				if s.cfg.SQLInject.Action == "block" {
+					metrics.Get().IncBlockedRequests()
+					w.Header().Set("X-Block-Reason", "sql_injection")
+					s.logger.Warn("request_blocked_sqlinject", map[string]interface{}{"ip": ip, "pattern": pattern, "path": r.URL.Path, "attack_type": "sql_injection"})
+					http.Error(w, "403 Forbidden", http.StatusForbidden)
+					return
+				}
+			}
+		}
+		// 5c. XSS check
+		if s.cfg.XSS.Enabled {
+			if matched, pattern := s.xss.InspectRequestWithBody(r, bodyBytes); matched {
+				if s.cfg.XSS.Action == "block" {
+					metrics.Get().IncBlockedRequests()
+					w.Header().Set("X-Block-Reason", "xss")
+					s.logger.Warn("request_blocked_xss", map[string]interface{}{"ip": ip, "pattern": pattern, "path": r.URL.Path, "attack_type": "xss"})
+					http.Error(w, "403 Forbidden", http.StatusForbidden)
+					return
+				}
+			}
+		}
+	} else {
+		// Original order for non-upload requests
+		// 5. SQL injection check
+		if s.cfg.SQLInject.Enabled {
+			if matched, pattern := s.sqlInject.InspectWithBody(r, bodyBytes); matched {
+				if s.cfg.SQLInject.Action == "block" {
+					metrics.Get().IncBlockedRequests()
+					w.Header().Set("X-Block-Reason", "sql_injection")
+					s.logger.Warn("request_blocked_sqlinject", map[string]interface{}{"ip": ip, "pattern": pattern, "path": r.URL.Path, "attack_type": "sql_injection"})
+					http.Error(w, "403 Forbidden", http.StatusForbidden)
+					return
+				}
+			}
+		}
 
-	// 5. XSS check
-	if s.cfg.XSS.Enabled {
-		if matched, pattern := s.xss.InspectRequestWithBody(r, bodyBytes); matched {
-			if s.cfg.XSS.Action == "block" {
-				metrics.Get().IncBlockedRequests()
-				s.logger.Warn("request_blocked_xss", map[string]interface{}{"ip": ip, "pattern": pattern, "path": r.URL.Path})
-				http.Error(w, "403 Forbidden", http.StatusForbidden)
-				return
+		// 6. XSS check
+		if s.cfg.XSS.Enabled {
+			if matched, pattern := s.xss.InspectRequestWithBody(r, bodyBytes); matched {
+				if s.cfg.XSS.Action == "block" {
+					metrics.Get().IncBlockedRequests()
+					w.Header().Set("X-Block-Reason", "xss")
+					s.logger.Warn("request_blocked_xss", map[string]interface{}{"ip": ip, "pattern": pattern, "path": r.URL.Path, "attack_type": "xss"})
+					http.Error(w, "403 Forbidden", http.StatusForbidden)
+					return
+				}
+			}
+		}
+
+		// 7. Web shell upload check
+		if s.cfg.Upload.Enabled {
+			if matched, pattern := s.webShell.InspectRequestWithBody(r, bodyBytes); matched {
+				if s.cfg.Upload.Action == "block" {
+					metrics.Get().IncBlockedRequests()
+					w.Header().Set("X-Block-Reason", "webshell_upload")
+					s.logger.Warn("request_blocked_webshell", map[string]interface{}{"ip": ip, "pattern": pattern, "path": r.URL.Path, "attack_type": "webshell_upload"})
+					http.Error(w, "403 Forbidden", http.StatusForbidden)
+					return
+				}
 			}
 		}
 	}
@@ -204,6 +289,13 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	} else {
 		metrics.Get().IncAllowedRequests()
 	}
+}
+
+// blockRequest is a helper to block requests with a reason header.
+func (s *Server) blockRequest(w http.ResponseWriter, reason string, statusCode int) {
+	metrics.Get().IncBlockedRequests()
+	w.Header().Set("X-Block-Reason", reason)
+	http.Error(w, http.StatusText(statusCode), statusCode)
 }
 
 // responseRecorder captures the status code.
