@@ -1,0 +1,56 @@
+version: "3.8"
+
+services:
+  shield:
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile
+    container_name: shield
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    volumes:
+      - ../../configs:/app/configs:ro
+      - shield-logs:/app/logs
+      - shield-data:/app/data
+    environment:
+      - TZ=Asia/Shanghai
+      - SHIELD_ENV=docker
+    networks:
+      - shield-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    container_name: shield-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    networks:
+      - shield-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  shield-logs:
+    driver: local
+  shield-data:
+    driver: local
+  redis-data:
+    driver: local
+
+networks:
+  shield-net:
+    driver: bridge

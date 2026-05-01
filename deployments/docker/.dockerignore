@@ -1,0 +1,47 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+bin/
+build/
+shield
+shield_*
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+*.test
+*.out
+coverage.html
+coverage.out
+
+# Data & logs (will be mounted as volumes)
+logs/
+data/
+
+# Scripts not needed in image
+scripts/
+install.sh
+run.sh
+uninstall.sh
+
+# Docs not needed in image
+docs/
+
+# Deployment configs not needed in image
+deployments/
+
+# Temporary files
+*.tmp
+*.bak

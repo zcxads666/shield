@@ -1,0 +1,38 @@
+[Unit]
+Description=Shield WAF - Lightweight Web Application Firewall
+Documentation=https://github.com/your-org/shield
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=shield
+Group=shield
+WorkingDirectory=/opt/shield
+ExecStart=/opt/shield/shield -config /opt/shield/configs/config.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+KillSignal=SIGTERM
+Restart=on-failure
+RestartSec=5
+StartLimitInterval=60s
+StartLimitBurst=3
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/shield/logs /opt/shield/data
+
+# Resource limits
+LimitNOFILE=65535
+LimitNPROC=4096
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=shield
+
+[Install]
+WantedBy=multi-user.target
