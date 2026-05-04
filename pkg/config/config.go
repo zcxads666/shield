@@ -10,19 +10,19 @@ import (
 
 // Config represents the entire shield configuration.
 type Config struct {
-	Server     ServerConfig     `yaml:"server"`
-	Proxy      ProxyConfig      `yaml:"proxy"`
-	RateLimit  RateLimitConfig  `yaml:"rate_limit"`
-	DDoS       DDoSConfig       `yaml:"ddos"`
-	CC         CCConfig         `yaml:"cc"`
-	SQLInject  SQLInjectConfig  `yaml:"sql_inject"`
-	XSS        XSSConfig        `yaml:"xss"`
-	BruteForce BruteForceConfig `yaml:"brute_force"`
-	Upload     UploadConfig     `yaml:"upload"`
-	Blacklist  BlacklistConfig  `yaml:"blacklist"`
-	Log        LogConfig        `yaml:"log"`
-	Alert      AlertConfig      `yaml:"alert"`
-	Rules      RulesConfig      `yaml:"rules"`
+	Server      ServerConfig      `yaml:"server"`
+	Proxy       ProxyConfig       `yaml:"proxy"`
+	RateLimit   RateLimitConfig   `yaml:"rate_limit"`
+	DDoSCC      DDoSCCConfig      `yaml:"ddos_cc"`
+	SQLInject   SQLInjectConfig   `yaml:"sql_inject"`
+	XSS         XSSConfig         `yaml:"xss"`
+	BruteForce  BruteForceConfig  `yaml:"brute_force"`
+	Upload      UploadConfig      `yaml:"upload"`
+	Blacklist   BlacklistConfig   `yaml:"blacklist"`
+	Log         LogConfig         `yaml:"log"`
+	Alert       AlertConfig       `yaml:"alert"`
+	Rules       RulesConfig       `yaml:"rules"`
+	WaitingRoom WaitingRoomConfig `yaml:"waiting_room"`
 }
 
 // ServerConfig defines the shield server settings.
@@ -55,19 +55,53 @@ type RateLimitConfig struct {
 	BlockDurationSec  int  `yaml:"block_duration_sec"`
 }
 
-// DDoSConfig defines DDoS defense settings.
-type DDoSConfig struct {
-	Enabled             bool `yaml:"enabled"`
-	MaxConnectionsPerIP int  `yaml:"max_connections_per_ip"`
-	SlowlorisTimeoutMs  int  `yaml:"slowloris_timeout_ms"`
-	ChallengeThreshold  int  `yaml:"challenge_threshold"`
-}
+// DDoSCCConfig defines unified DDoS/CC defense settings.
+type DDoSCCConfig struct {
+	Enabled bool `yaml:"enabled"`
 
-// CCConfig defines CC (Challenge Collapsar) attack detection settings.
-type CCConfig struct {
-	Enabled         bool `yaml:"enabled"`
-	MaxRequests     int  `yaml:"max_requests"`
-	WindowSec       int  `yaml:"window_sec"`
+	// Token bucket rate limiting
+	RequestsPerSecond int `yaml:"requests_per_second"` // default 25
+	BurstSize         int `yaml:"burst_size"`          // default 30
+
+	// Connection / slowloris
+	MaxConnectionsPerIP int `yaml:"max_connections_per_ip"` // default 100
+	SlowlorisTimeoutMs  int `yaml:"slowloris_timeout_ms"`   // default 30000
+
+	// Global DDoS detection thresholds
+	GlobalRateDangerThreshold      float64 `yaml:"global_rate_danger_threshold"`       // default 50
+	GlobalRateDistributedThreshold float64 `yaml:"global_rate_distributed_threshold"`  // default 22
+	GlobalDistributedPathThreshold int     `yaml:"global_distributed_path_threshold"`  // default 30
+	GlobalConcentratedPathThreshold int    `yaml:"global_concentrated_path_threshold"` // default 3
+
+	// Per-IP sliding window
+	MaxRequests   int `yaml:"max_requests"`   // default 200
+	BurstRequests int `yaml:"burst_requests"` // default 300
+	WindowSec     int `yaml:"window_sec"`     // default 60
+
+	// Behavior fingerprint thresholds
+	BehaviorScoreThreshold float64 `yaml:"behavior_score_threshold"` // default 70
+	BehaviorBlockThreshold  float64 `yaml:"behavior_block_threshold"` // default 30
+
+	// Path concentration detection (cross-IP aggregation)
+	PathIPThreshold     int     `yaml:"path_ip_threshold"`      // default 50
+	PathAvgReqThreshold float64 `yaml:"path_avg_req_threshold"` // default 3
+	PathTimeWindowSec   int     `yaml:"path_time_window_sec"`   // default 600
+
+	// IP suspicion thresholds
+	SuspicionBlockThreshold     float64 `yaml:"suspicion_block_threshold"`     // default 80
+	SuspicionChallengeThreshold float64 `yaml:"suspicion_challenge_threshold"` // default 50
+
+	// Block/ban configuration
+	BlockDurationSec  int     `yaml:"block_duration_sec"`  // default 600
+	BlockAcceleration float64 `yaml:"block_acceleration"`  // default 1.5
+	MaxBlockCount     int     `yaml:"max_block_count"`     // default 3
+
+	// Challenge system
+	JSChallengeEnabled     bool `yaml:"js_challenge_enabled"`      // default true
+	CaptchaChallengeEnabled bool `yaml:"captcha_challenge_enabled"` // default true
+	EnvFingerprintEnabled   bool `yaml:"env_fingerprint_enabled"`   // default true
+	PoWChallengeEnabled     bool `yaml:"pow_challenge_enabled"`     // default true
+	PoWDifficulty           int  `yaml:"pow_difficulty"`            // default 4
 }
 
 // SQLInjectConfig defines SQL injection detection settings.
@@ -131,6 +165,16 @@ type RulesConfig struct {
 	RulesPath         string `yaml:"rules_path"`
 	HotReload         bool   `yaml:"hot_reload"`
 	ReloadIntervalSec int    `yaml:"reload_interval_sec"`
+}
+
+// WaitingRoomConfig defines peak-traffic queuing settings.
+type WaitingRoomConfig struct {
+	Enabled         bool    `yaml:"enabled"`
+	MaxQueueSize    int     `yaml:"max_queue_size"`
+	ReleasePerSec   float64 `yaml:"release_per_sec"`
+	SessionTTLSec   int     `yaml:"session_ttl_sec"`
+	QueueTimeoutSec int     `yaml:"queue_timeout_sec"`
+	ActiveThreshold float64 `yaml:"active_threshold"`
 }
 
 // Manager handles configuration loading and hot reload.
@@ -217,28 +261,82 @@ func (m *Manager) setDefault(cfg *Config) {
 		cfg.Proxy.TargetURL = "http://127.0.0.1:80"
 	}
 	if cfg.RateLimit.RequestsPerSecond == 0 {
-		cfg.RateLimit.RequestsPerSecond = 100
+		cfg.RateLimit.RequestsPerSecond = 25
 	}
 	if cfg.RateLimit.BurstSize == 0 {
-		cfg.RateLimit.BurstSize = 150
+		cfg.RateLimit.BurstSize = 30
 	}
 	if cfg.RateLimit.BlockDurationSec == 0 {
 		cfg.RateLimit.BlockDurationSec = 300
 	}
-	if cfg.DDoS.MaxConnectionsPerIP == 0 {
-		cfg.DDoS.MaxConnectionsPerIP = 1000
+	if cfg.DDoSCC.RequestsPerSecond == 0 {
+		cfg.DDoSCC.RequestsPerSecond = 25
 	}
-	if cfg.DDoS.SlowlorisTimeoutMs == 0 {
-		cfg.DDoS.SlowlorisTimeoutMs = 30000
+	if cfg.DDoSCC.BurstSize == 0 {
+		cfg.DDoSCC.BurstSize = 30
 	}
-	if cfg.CC.MaxRequests == 0 {
-		cfg.CC.MaxRequests = 100
+	if cfg.DDoSCC.MaxConnectionsPerIP == 0 {
+		cfg.DDoSCC.MaxConnectionsPerIP = 100
 	}
-	if cfg.CC.WindowSec == 0 {
-		cfg.CC.WindowSec = 60
+	if cfg.DDoSCC.SlowlorisTimeoutMs == 0 {
+		cfg.DDoSCC.SlowlorisTimeoutMs = 30000
+	}
+	if cfg.DDoSCC.GlobalRateDangerThreshold == 0 {
+		cfg.DDoSCC.GlobalRateDangerThreshold = 50
+	}
+	if cfg.DDoSCC.GlobalRateDistributedThreshold == 0 {
+		cfg.DDoSCC.GlobalRateDistributedThreshold = 22
+	}
+	if cfg.DDoSCC.GlobalDistributedPathThreshold == 0 {
+		cfg.DDoSCC.GlobalDistributedPathThreshold = 30
+	}
+	if cfg.DDoSCC.GlobalConcentratedPathThreshold == 0 {
+		cfg.DDoSCC.GlobalConcentratedPathThreshold = 3
+	}
+	if cfg.DDoSCC.MaxRequests == 0 {
+		cfg.DDoSCC.MaxRequests = 200
+	}
+	if cfg.DDoSCC.BurstRequests == 0 {
+		cfg.DDoSCC.BurstRequests = 300
+	}
+	if cfg.DDoSCC.WindowSec == 0 {
+		cfg.DDoSCC.WindowSec = 60
+	}
+	if cfg.DDoSCC.BehaviorScoreThreshold == 0 {
+		cfg.DDoSCC.BehaviorScoreThreshold = 70
+	}
+	if cfg.DDoSCC.BehaviorBlockThreshold == 0 {
+		cfg.DDoSCC.BehaviorBlockThreshold = 30
+	}
+	if cfg.DDoSCC.PathIPThreshold == 0 {
+		cfg.DDoSCC.PathIPThreshold = 50
+	}
+	if cfg.DDoSCC.PathAvgReqThreshold == 0 {
+		cfg.DDoSCC.PathAvgReqThreshold = 3
+	}
+	if cfg.DDoSCC.PathTimeWindowSec == 0 {
+		cfg.DDoSCC.PathTimeWindowSec = 600
+	}
+	if cfg.DDoSCC.SuspicionBlockThreshold == 0 {
+		cfg.DDoSCC.SuspicionBlockThreshold = 80
+	}
+	if cfg.DDoSCC.SuspicionChallengeThreshold == 0 {
+		cfg.DDoSCC.SuspicionChallengeThreshold = 50
+	}
+	if cfg.DDoSCC.BlockDurationSec == 0 {
+		cfg.DDoSCC.BlockDurationSec = 600
+	}
+	if cfg.DDoSCC.BlockAcceleration == 0 {
+		cfg.DDoSCC.BlockAcceleration = 1.5
+	}
+	if cfg.DDoSCC.MaxBlockCount == 0 {
+		cfg.DDoSCC.MaxBlockCount = 3
+	}
+	if cfg.DDoSCC.PoWDifficulty == 0 {
+		cfg.DDoSCC.PoWDifficulty = 5
 	}
 	if cfg.BruteForce.MaxFailures == 0 {
-		cfg.BruteForce.MaxFailures = 5
+		cfg.BruteForce.MaxFailures = 3
 	}
 	if cfg.BruteForce.WindowSec == 0 {
 		cfg.BruteForce.WindowSec = 60
@@ -272,5 +370,20 @@ func (m *Manager) setDefault(cfg *Config) {
 	}
 	if cfg.Upload.MaxFileSizeMB == 0 {
 		cfg.Upload.MaxFileSizeMB = 32
+	}
+	if cfg.WaitingRoom.MaxQueueSize == 0 {
+		cfg.WaitingRoom.MaxQueueSize = 5000
+	}
+	if cfg.WaitingRoom.ReleasePerSec == 0 {
+		cfg.WaitingRoom.ReleasePerSec = 5.0
+	}
+	if cfg.WaitingRoom.SessionTTLSec == 0 {
+		cfg.WaitingRoom.SessionTTLSec = 300
+	}
+	if cfg.WaitingRoom.QueueTimeoutSec == 0 {
+		cfg.WaitingRoom.QueueTimeoutSec = 300
+	}
+	if cfg.WaitingRoom.ActiveThreshold == 0 {
+		cfg.WaitingRoom.ActiveThreshold = 40.0
 	}
 }
