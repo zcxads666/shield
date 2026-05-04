@@ -17,7 +17,7 @@ type globalStats struct {
 
 func newGlobalStats() *globalStats {
 	return &globalStats{
-		requests:  make([]reqSample, maxTrackedRequests*4),
+		requests:  make([]reqSample, maxTrackedRequests*10),
 		startTime: time.Now(),
 	}
 }

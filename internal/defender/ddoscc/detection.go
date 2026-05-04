@@ -31,29 +31,29 @@ func (d *Detector) hasValidCookie(r *http.Request) bool {
 
 // checkGlobalRate detects multi-IP distributed DDoS floods.
 // During a global flood, new users get challenged; returning users with valid cookies bypass.
-func (d *Detector) checkGlobalRate(ip string) (bool, Action, string) {
+func (d *Detector) checkGlobalRate(ip string) bool {
 	globalRate := d.global.requestRate(defaultStatsWindow)
 
 	if globalRate > d.cfg.GlobalRateDangerThreshold {
 		metrics.Get().IncDDoSCCBlocks()
 		d.logWarn(ip, "", "global_flood", globalRate)
-		return false, ActionEnvFingerprint, AttackTypeGlobalFlood
+		return false
 	}
 
 	globalPaths := d.global.uniquePathsInWindow(defaultStatsWindow)
 	if globalRate > d.cfg.GlobalRateDistributedThreshold && globalPaths > d.cfg.GlobalDistributedPathThreshold {
 		metrics.Get().IncDDoSCCBlocks()
 		d.logWarn(ip, "", "distributed_ddos", globalRate)
-		return false, ActionEnvFingerprint, AttackTypeDistributed
+		return false
 	}
 
 	if globalRate > d.cfg.GlobalRateDistributedThreshold && globalPaths <= d.cfg.GlobalConcentratedPathThreshold {
 		metrics.Get().IncDDoSCCBlocks()
 		d.logWarn(ip, "", "concentrated_ddos", globalRate)
-		return false, ActionEnvFingerprint, AttackTypeConcentrated
+		return false
 	}
 
-	return true, ActionAllow, ""
+	return true
 }
 
 // --- Detection Layer 2: Per-IP Token Bucket ---
@@ -115,12 +115,6 @@ func (d *Detector) detectSlowLoris(ip string) bool {
 	headerFail := s.headerFailFraction()
 
 	if conns >= slowlorisMinConns && rate < slowlorisMinRate && rate > 0 && headerFail > 0.5 {
-		return true
-	}
-
-	byteRange := s.byteRangeCount
-	reqCount := s.reqCount
-	if conns >= 3 && rate < 0.5 && rate > 0 && reqCount > 0 && float64(byteRange)/float64(reqCount) > 0.5 {
 		return true
 	}
 	return false

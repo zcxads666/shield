@@ -21,7 +21,7 @@ import (
 
 func main() {
 	var (
-		configPath = flag.String("config", "config.yaml", "path to configuration file")
+		configPath = flag.String("config", "configs/config.yaml", "path to configuration file")
 		cmd        = flag.String("cmd", "run", "command: run, stats, blacklist")
 	)
 	flag.Parse()

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/shield/shield/pkg/logger"
@@ -15,6 +16,8 @@ type Notifier struct {
 	enabled   bool
 	webhook   string
 	threshold int
+	count     int
+	mu        sync.Mutex
 	logger    *logger.Logger
 }
 
@@ -37,11 +40,19 @@ type Event struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-// Notify sends an alert if enabled.
+// Notify sends an alert if enabled. The threshold controls minimum event count
+// before webhooks fire: threshold=0 fires on every event, threshold=N fires
+// only after N cumulative events.
 func (n *Notifier) Notify(event Event) {
 	if !n.enabled {
 		return
 	}
+
+	n.mu.Lock()
+	n.count++
+	current := n.count
+	n.mu.Unlock()
+
 	if n.logger != nil {
 		n.logger.Warn("alert_triggered", map[string]interface{}{
 			"type":    event.Type,
@@ -49,7 +60,8 @@ func (n *Notifier) Notify(event Event) {
 			"message": event.Message,
 		})
 	}
-	if n.webhook != "" {
+
+	if n.webhook != "" && current >= n.threshold {
 		go n.sendWebhook(event)
 	}
 }

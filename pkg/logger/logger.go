@@ -56,7 +56,7 @@ func New(level, format, outputPath string) (*Logger, error) {
 		format:     format,
 		outputPath: outputPath,
 	}
-	if err := l.rotate(); err != nil {
+	if err := l.openLogFile(); err != nil {
 		return nil, err
 	}
 	return l, nil
@@ -79,7 +79,7 @@ func parseLevel(s string) Level {
 	}
 }
 
-func (l *Logger) rotate() error {
+func (l *Logger) openLogFile() error {
 	if l.outputPath == "" || l.outputPath == "stderr" {
 		l.out = os.Stderr
 		return nil

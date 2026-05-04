@@ -82,12 +82,11 @@ func (r *IPReputation) evictOne() {
 	}
 }
 
-// AddEvent adds a suspicious event, applying decay and updating the score.
+// AddEvent adds a suspicious event and updates the score.
 func (s *IPSuspicion) AddEvent(event SuspicionEvent) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.applyDecay()
 	s.Score += event.Weight
 	s.History = append(s.History, event)
 	s.LastSeen = time.Now()
@@ -97,13 +96,17 @@ func (s *IPSuspicion) AddEvent(event SuspicionEvent) {
 	}
 }
 
-func (s *IPSuspicion) applyDecay() {
+// computeDecayedScore calculates the total score from history with time-based decay.
+// Must be called under lock.
+func (s *IPSuspicion) computeDecayedScore() float64 {
 	now := time.Now()
-	for i := range s.History {
-		age := now.Sub(s.History[i].Time).Hours()
+	var total float64
+	for _, e := range s.History {
+		age := now.Sub(e.Time).Hours()
 		decay := math.Exp(-age / 24)
-		s.History[i].Weight *= decay
+		total += e.Weight * decay
 	}
+	return total
 }
 
 // Recalculate rebuilds the score from history with decay.
@@ -111,13 +114,7 @@ func (s *IPSuspicion) Recalculate() float64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.applyDecay()
-
-	var total float64
-	for _, e := range s.History {
-		total += e.Weight
-	}
-	s.Score = total
+	s.Score = s.computeDecayedScore()
 	s.LastSeen = time.Now()
 	return s.Score
 }
@@ -126,14 +123,8 @@ func (s *IPSuspicion) Recalculate() float64 {
 func (s *IPSuspicion) ShouldBlock(blockThreshold float64) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.applyDecay()
 
-	var total float64
-	for _, e := range s.History {
-		total += e.Weight
-	}
-	s.Score = total
-
+	s.Score = s.computeDecayedScore()
 	return s.Score > blockThreshold
 }
 
@@ -141,28 +132,17 @@ func (s *IPSuspicion) ShouldBlock(blockThreshold float64) bool {
 func (s *IPSuspicion) ShouldChallenge(challengeThreshold float64) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.applyDecay()
 
-	var total float64
-	for _, e := range s.History {
-		total += e.Weight
-	}
-	s.Score = total
-
+	s.Score = s.computeDecayedScore()
 	return s.Score > challengeThreshold
 }
 
-// GetScore returns the current decayed score.
+// GetScore returns the current decayed score without modifying history.
 func (s *IPSuspicion) GetScore() float64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.applyDecay()
 
-	var total float64
-	for _, e := range s.History {
-		total += e.Weight
-	}
-	s.Score = total
+	s.Score = s.computeDecayedScore()
 	return s.Score
 }
 

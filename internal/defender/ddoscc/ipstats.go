@@ -19,8 +19,6 @@ type ipStats struct {
 	firstSeen      time.Time
 	connCount      int
 	emptyBodyCount int
-	nullByteCount  int
-	byteRangeCount int
 }
 
 type reqSample struct {

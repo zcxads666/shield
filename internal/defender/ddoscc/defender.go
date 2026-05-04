@@ -1,6 +1,7 @@
 package ddoscc
 
 import (
+	"math"
 	"net/http"
 	"sync"
 	"time"
@@ -159,7 +160,7 @@ func (d *Detector) Check(r *http.Request) Action {
 	// Layer 1: Global rate detection — cookie users skip (they already proved legitimacy).
 	// New users get challenged during multi-IP floods.
 	if !hasCookie {
-		if ok, _, _ := d.checkGlobalRate(ip); !ok {
+		if !d.checkGlobalRate(ip) {
 			if d.cfg.EnvFingerprintEnabled {
 				return ActionEnvFingerprint
 			}
@@ -452,23 +453,12 @@ func calcTimingRandomness(timestamps []time.Time) float64 {
 	}
 	cv := 0.0
 	if mean > 0 {
-		cv = sqrtVal(variance) / mean
+		cv = math.Sqrt(variance) / mean
 	}
 	if cv >= 1 {
 		return 1.0
 	}
 	return cv
-}
-
-func sqrtVal(x float64) float64 {
-	if x <= 0 {
-		return 0
-	}
-	z := x
-	for i := 0; i < 20; i++ {
-		z -= (z*z - x) / (2 * z)
-	}
-	return z
 }
 
 func calcPathDiversity(paths map[string]int, currentPath string) float64 {
