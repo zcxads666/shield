@@ -16,7 +16,6 @@ import (
 	"github.com/shield/shield/internal/defender/sqlinject"
 	"github.com/shield/shield/internal/defender/webshell"
 	"github.com/shield/shield/internal/defender/xss"
-	"github.com/shield/shield/internal/service/ipreputation"
 	"github.com/shield/shield/internal/service/rules"
 	"github.com/shield/shield/internal/storage/blacklist"
 	"github.com/shield/shield/pkg/config"
@@ -39,7 +38,6 @@ type ProxyServer struct {
 	bruteForce   *bruteforce.Defender
 	rules        *rules.Engine
 	semaphore    *semaphore.PrioritySemaphore
-	ipReputation *ipreputation.IPReputation
 	waitingRoom  *waitingroom.WaitingRoom
 }
 
@@ -57,8 +55,6 @@ func NewProxyServer(cfg *config.Config, log *logger.Logger, bl *blacklist.Manage
 	}
 
 	sem := semaphore.NewPrioritySemaphore(cfg.Server.MaxConcurrent, cfg.Server.HighPriorityRatio)
-	// IP reputation: 10-second window, 20 requests threshold for suspicious
-	ipRep := ipreputation.NewIPReputation(10*time.Second, 20)
 
 	s := &ProxyServer{
 		cfg:          cfg,
@@ -67,7 +63,6 @@ func NewProxyServer(cfg *config.Config, log *logger.Logger, bl *blacklist.Manage
 		blacklist:    bl,
 		rules:        rl,
 		semaphore:    sem,
-		ipReputation: ipRep,
 	}
 
 	// Initialize unified DDoS/CC defender
@@ -198,11 +193,6 @@ func (s *ProxyServer) handle(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Record IP for reputation tracking
-	if s.ipReputation != nil {
-		s.ipReputation.Record(ip)
-	}
-
 	// 0. Global concurrency limit with priority queuing
 	if s.semaphore != nil {
 		ctx, cancel := context.WithTimeout(r.Context(), time.Duration(s.cfg.Server.QueueTimeoutMs)*time.Millisecond)
@@ -211,7 +201,7 @@ func (s *ProxyServer) handle(w http.ResponseWriter, r *http.Request) {
 		// 1. IPs not in blacklist
 		// 2. IPs not marked as suspicious by reputation tracker
 		highPriority := (!s.cfg.Blacklist.Enabled || !s.blacklist.IsBlocked(ip)) &&
-			(s.ipReputation == nil || !s.ipReputation.IsSuspicious(ip))
+			(s.ddosCC == nil || !s.ddosCC.IsSuspicious(ip))
 		acquiredHigh, err := s.semaphore.AcquireWithPriority(ctx, highPriority)
 		if err != nil {
 			metrics.Get().IncBlockedRequests()

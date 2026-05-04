@@ -389,6 +389,16 @@ func (d *Detector) GlobalRequestRate() float64 {
 	return d.global.requestRate(defaultStatsWindow)
 }
 
+// IsSuspicious returns true if the IP has a non-zero reputation score,
+// indicating it has triggered at least one suspicious event.
+func (d *Detector) IsSuspicious(ip string) bool {
+	if !d.enabled {
+		return false
+	}
+	suspicion := d.reputation.GetOrCreate(ip)
+	return suspicion.GetScore() > 0
+}
+
 // --- Behavior Tracking ---
 
 func (d *Detector) trackBehavior(ip, path string) {
