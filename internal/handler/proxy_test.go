@@ -19,7 +19,27 @@ func newTestConfig() *config.Config {
 		Server: config.ServerConfig{BindAddr: ":8080", ReadTimeoutMs: 30000, WriteTimeoutMs: 30000, MaxHeaderBytes: 1 << 20},
 		Proxy:  config.ProxyConfig{TargetURL: "http://127.0.0.1:80", TrustForwarded: false},
 		RateLimit: config.RateLimitConfig{Enabled: true, RequestsPerSecond: 100, BurstSize: 150, BlockDurationSec: 300},
-		DDoS: config.DDoSConfig{Enabled: true, MaxConnectionsPerIP: 1000, SlowlorisTimeoutMs: 30000},
+		DDoSCC: config.DDoSCCConfig{
+			Enabled:                       true,
+			MaxConnectionsPerIP:           1000,
+			SlowlorisTimeoutMs:            30000,
+			GlobalRateDangerThreshold:      1000,
+			GlobalRateDistributedThreshold: 1000,
+			GlobalDistributedPathThreshold: 1000,
+			GlobalConcentratedPathThreshold: 1,
+			MaxRequests:                   1000,
+			BurstRequests:                 1000,
+			WindowSec:                     1,
+			RequestsPerSecond:             1000,
+			BurstSize:                     1000,
+			BehaviorScoreThreshold:        0,
+			BehaviorBlockThreshold:        0,
+			SuspicionBlockThreshold:       100,
+			SuspicionChallengeThreshold:   100,
+			JSChallengeEnabled:            false,
+			EnvFingerprintEnabled:         false,
+			PoWChallengeEnabled:           false,
+		},
 		SQLInject: config.SQLInjectConfig{Enabled: true, Action: "block"},
 		XSS: config.XSSConfig{Enabled: true, Action: "block"},
 		BruteForce: config.BruteForceConfig{Enabled: true, MaxFailures: 5, WindowSec: 60, BlockDurationSec: 600, ProtectedPaths: []string{"/login", "/api/auth"}, StatusCodes: []int{401, 403}},
@@ -211,7 +231,7 @@ func BenchmarkProxy_Throughput(b *testing.B) {
 	cfg.SQLInject.Enabled = false
 	cfg.XSS.Enabled = false
 	cfg.BruteForce.Enabled = false
-	cfg.DDoS.Enabled = false
+	cfg.DDoSCC.Enabled = false
 	cfg.Blacklist.Enabled = false
 	log, _ := logger.New("warn", "json", "stderr")
 	bl := blacklist.NewManager("")

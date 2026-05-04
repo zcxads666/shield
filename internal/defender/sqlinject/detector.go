@@ -30,7 +30,7 @@ var defaultSQLPatterns = []string{
 	// and followed by space/newline or end-of-string.
 	// Note: standalone --$ check is done in code to avoid multipart boundary false positives.
 	`(?i)(['";]|^)--[\n]`,`(?i)(['";]|^)--\s+[a-zA-Z]`,
-	`(?i)/\*|\*/`,
+	`(?i)/\*[*!a-zA-Z0-9]`,
 	// 4: OR/AND numeric tautology (handles OR(1)=(1) no-space bypass)
 	`(?i)(\bOR\b|\bAND\b)\s*\(?\s*\d+\s*\)?\s*=\s*\(?\s*\d+\s*\)?`,
 	// 5: quote OR/AND quote tautology (replaces broken backreference pattern)
@@ -63,7 +63,23 @@ var defaultSQLPatterns = []string{
 	`(?i)(?:^|[^a-zA-Z0-9_])[a-zA-Z]'\s*(OR|AND|\|\||&&)\s*'[a-zA-Z0-9_]['"]\s*=\s*['"][a-zA-Z0-9_]`,
 	// Pattern for function-call tautologies like 1' AND 1=eval(1)--
 	`(?i)(\bOR\b|\bAND\b)\s+\d+\s*=\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\(`,
-}
+		// MySQL-specific functions
+		`(?i)extractvalue\s*\(\s*\d+\s*,`,
+		`(?i)updatexml\s*\(\s*\d+\s*,`,
+		`(?i)\bmid\s*\(\s*[^)]+\s*,\s*\d+\s*,\s*\d+\s*\)`,
+		`(?i)\bextractvalue\s*\(`,
+		`(?i)\bupdatexml\s*\(`,
+		// ORDER BY injection with column number and optional comment or direction
+		`(?i)\bORDER\s+BY\s+\d+\s*(ASC|DESC)?\s*(--|#|/\*)`,
+		// MySQL # comment character in injected value
+		`(?i)['"][\s]*#`,
+		`(?i)#\s*(SELECT|INSERT|UPDATE|DELETE|DROP|UNION|EXEC)`,
+		// Raw && / || tautology with no-space bypass
+		`(?i)\|\|\s*['"]?\d+['"]?\s*=\s*['"]?\d+`,
+		`(?i)&&\s*['"]?\d+['"]?\s*=\s*['"]?\d+`,
+		// Comment dash preceded by any word char (catches "1 ASC--")
+		`(?i)[a-zA-Z]\s+--\s`,
+	}
 
 // NewDetector creates a SQL injection detector.
 func NewDetector(enabled bool, action string, log *logger.Logger) *Detector {
@@ -94,14 +110,23 @@ func (s *Detector) Inspect(r *http.Request) (bool, string) {
 	return s.InspectWithBody(r, nil)
 }
 
-// InspectWithBody checks a request for SQL injection, using raw body bytes
-// as fallback when ParseForm fails (e.g., invalid URL escapes like "<%=...%>").
+// InspectWithBody checks a request for SQL injection across query params, body,
+// HTTP headers, and cookies.
 func (s *Detector) InspectWithBody(r *http.Request, bodyBytes []byte) (bool, string) {
 	if !s.enabled {
 		return false, ""
 	}
 
+	// Combine all targets from query params, body, headers, and cookies
 	targets := common.CollectParamsWithBody(r, bodyBytes)
+	targets = append(targets, common.CollectHeaders(r)...)
+	targets = append(targets, common.CollectCookies(r)...)
+
+	return s.checkTargets(targets, r)
+}
+
+// checkTargets runs all patterns against a list of target strings.
+func (s *Detector) checkTargets(targets []string, r *http.Request) (bool, string) {
 	s.mu.RLock()
 	patterns := s.patterns
 	s.mu.RUnlock()
@@ -129,12 +154,11 @@ func (s *Detector) InspectWithBody(r *http.Request, bodyBytes []byte) (bool, str
 				}
 			}
 			// Additional check: -- at end of string, but skip multipart boundaries
-			if strings.HasSuffix(check, "--") && !strings.Contains(check, "------") {
-				// Ensure it's a real SQL comment, not just something ending in --
-				// Check that -- is preceded by a quote, semicolon, space, or digit
+			// (strings that start with -- or contain 6+ consecutive dashes)
+			if strings.HasSuffix(check, "--") && !strings.HasPrefix(check, "--") && !strings.Contains(check, "------") {
 				if len(check) > 2 {
 					prev := check[len(check)-3]
-					if prev == '\'' || prev == '"' || prev == ';' || prev == ' ' || prev == '\n' || prev == '\t' || (prev >= '0' && prev <= '9') {
+					if prev == '\'' || prev == '"' || prev == ';' || prev == ' ' || prev == '\n' || prev == '\t' || (prev >= '0' && prev <= '9') || (prev >= 'A' && prev <= 'Z') || (prev >= 'a' && prev <= 'z') {
 						metrics.Get().IncSQLInjections()
 						if s.logger != nil {
 							s.logger.Warn("sql_injection_detected", map[string]interface{}{

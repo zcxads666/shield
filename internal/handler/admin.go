@@ -8,6 +8,7 @@ import (
 	"github.com/shield/shield/internal/storage/blacklist"
 	"github.com/shield/shield/pkg/config"
 	"github.com/shield/shield/pkg/metrics"
+	"github.com/shield/shield/pkg/version"
 )
 
 // Server provides admin HTTP endpoints.
@@ -45,9 +46,8 @@ func (s *AdminServer) handleStats(w http.ResponseWriter, r *http.Request) {
 		"sql_injections":     m.SQLInjections,
 		"xss_attempts":       m.XSSAttempts,
 		"webshell_uploads":   m.WebShellUploads,
-		"cc_blocks":          m.CCBlocks,
+		"ddos_cc_blocks":     m.DDoSCCBlocks,
 		"brute_force_blocks": m.BruteForceBlocks,
-		"ddos_blocks":        m.DDoSBlocks,
 		"blacklisted_ips":    m.BlacklistedIPs,
 		"timestamp":          time.Now().Format(time.RFC3339),
 	})
@@ -88,5 +88,8 @@ func (s *AdminServer) handleBlacklist(w http.ResponseWriter, r *http.Request) {
 
 func (s *AdminServer) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":  "ok",
+		"version": version.Version,
+	})
 }

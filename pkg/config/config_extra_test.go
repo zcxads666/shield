@@ -93,22 +93,22 @@ func TestDefaults_All(t *testing.T) {
 	if cfg.Proxy.TargetURL != "http://127.0.0.1:80" {
 		t.Errorf("unexpected target: %s", cfg.Proxy.TargetURL)
 	}
-	if cfg.RateLimit.RequestsPerSecond != 100 {
+	if cfg.RateLimit.RequestsPerSecond != 25 {
 		t.Errorf("unexpected rps: %d", cfg.RateLimit.RequestsPerSecond)
 	}
-	if cfg.RateLimit.BurstSize != 150 {
+	if cfg.RateLimit.BurstSize != 30 {
 		t.Errorf("unexpected burst: %d", cfg.RateLimit.BurstSize)
 	}
 	if cfg.RateLimit.BlockDurationSec != 300 {
 		t.Errorf("unexpected block duration: %d", cfg.RateLimit.BlockDurationSec)
 	}
-	if cfg.DDoS.MaxConnectionsPerIP != 1000 {
-		t.Errorf("unexpected max conn: %d", cfg.DDoS.MaxConnectionsPerIP)
+	if cfg.DDoSCC.MaxConnectionsPerIP != 100 {
+		t.Errorf("unexpected max conn: %d", cfg.DDoSCC.MaxConnectionsPerIP)
 	}
-	if cfg.DDoS.SlowlorisTimeoutMs != 30000 {
-		t.Errorf("unexpected slowloris timeout: %d", cfg.DDoS.SlowlorisTimeoutMs)
+	if cfg.DDoSCC.SlowlorisTimeoutMs != 30000 {
+		t.Errorf("unexpected slowloris timeout: %d", cfg.DDoSCC.SlowlorisTimeoutMs)
 	}
-	if cfg.BruteForce.MaxFailures != 5 {
+	if cfg.BruteForce.MaxFailures != 3 {
 		t.Errorf("unexpected max failures: %d", cfg.BruteForce.MaxFailures)
 	}
 	if cfg.BruteForce.WindowSec != 60 {
@@ -138,10 +138,13 @@ func TestDefaults_All(t *testing.T) {
 	if cfg.Rules.ReloadIntervalSec != 3 {
 		t.Errorf("unexpected reload interval: %d", cfg.Rules.ReloadIntervalSec)
 	}
-	if cfg.CC.MaxRequests != 100 {
-		t.Errorf("unexpected cc max requests: %d", cfg.CC.MaxRequests)
+	if cfg.DDoSCC.MaxRequests != 200 {
+		t.Errorf("unexpected ddos_cc max requests: %d", cfg.DDoSCC.MaxRequests)
 	}
-	if cfg.CC.WindowSec != 60 {
-		t.Errorf("unexpected cc window: %d", cfg.CC.WindowSec)
+	if cfg.DDoSCC.BurstRequests != 300 {
+		t.Errorf("unexpected ddos_cc burst requests: %d", cfg.DDoSCC.BurstRequests)
+	}
+	if cfg.DDoSCC.WindowSec != 60 {
+		t.Errorf("unexpected ddos_cc window: %d", cfg.DDoSCC.WindowSec)
 	}
 }

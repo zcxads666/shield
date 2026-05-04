@@ -1,0 +1,997 @@
+{
+  "timestamp": "2026-05-02T12:44:37Z",
+  "issue": "HUD-102",
+  "title": "Round 18 Regression - DDoS/CC Label Verification",
+  "summary": {
+    "brute_force": {
+      "name": "Brute Force",
+      "total": 15,
+      "blocked": 13,
+      "passed": 2,
+      "block_rate": 86.66666666666667,
+      "ident_ok": 13,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true,
+      "notes": "first blocked at req #3"
+    },
+    "cc_attack": {
+      "name": "CC Attack",
+      "total": 120,
+      "blocked": 120,
+      "passed": 0,
+      "block_rate": 100,
+      "ident_ok": 0,
+      "ident_wrong": 120,
+      "ident_accuracy": 0,
+      "wrong_items": [
+        {
+          "payload": "GET /cc-target?id=0",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=1",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=2",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=3",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=4",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=5",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=6",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=7",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=8",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=9",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=10",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=11",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=12",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=13",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=14",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=15",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=16",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=17",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=18",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=19",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=20",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=21",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=22",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=23",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=24",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=25",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=26",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=27",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=28",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=29",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=30",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=31",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=32",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=33",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=34",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=35",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=36",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=37",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=38",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=39",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=40",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=41",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=42",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=43",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=44",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=45",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=46",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=47",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=48",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=49",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=50",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=51",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=52",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=53",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=54",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=55",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=56",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=57",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=58",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=59",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=60",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=61",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=62",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=63",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=64",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=65",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=66",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=67",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=68",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=69",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=70",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=71",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=72",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=73",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=74",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=75",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=76",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=77",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=78",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=79",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=80",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=81",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=82",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=83",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=84",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=85",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=86",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=87",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=88",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=89",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=90",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=91",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=92",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=93",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=94",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=95",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=96",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=97",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=98",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=99",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=100",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=101",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=102",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=103",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=104",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=105",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=106",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=107",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=108",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=109",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=110",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=111",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=112",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=113",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=114",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=115",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=116",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=117",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=118",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        },
+        {
+          "payload": "GET /cc-target?id=119",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "WRONG LABEL - expected cc_attack"
+        }
+      ],
+      "passed_check": false,
+      "notes": "⚠️ LABEL LEAK: 120 CC blocks mislabeled"
+    },
+    "cc_normal_mix": {
+      "name": "CC Normal Mix Test",
+      "total": 90,
+      "blocked": 0,
+      "passed": 90,
+      "block_rate": 0,
+      "ident_ok": 0,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true,
+      "notes": "✅ No false positives, CC labels correct"
+    },
+    "ddos_goldeneye": {
+      "name": "DDoS GoldenEye",
+      "total": 450,
+      "blocked": 398,
+      "passed": 52,
+      "block_rate": 88.44444444444444,
+      "ident_ok": 398,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": false,
+      "notes": "✅ All 398 blocked requests correctly labeled as ddos_attack"
+    },
+    "ddos_http_flood": {
+      "name": "DDoS HTTP Flood",
+      "total": 400,
+      "blocked": 400,
+      "passed": 0,
+      "block_rate": 100,
+      "ident_ok": 400,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true,
+      "notes": "✅ All 400 blocked correctly labeled as ddos_attack"
+    },
+    "ddos_pure_volume": {
+      "name": "DDoS Pure Volume",
+      "total": 350,
+      "blocked": 350,
+      "passed": 0,
+      "block_rate": 100,
+      "ident_ok": 350,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true,
+      "notes": "✅ All 350 blocked correctly labeled as ddos_attack"
+    },
+    "normal_requests": {
+      "name": "Normal Requests",
+      "total": 10,
+      "blocked": 0,
+      "passed": 10,
+      "block_rate": 0,
+      "ident_ok": 10,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true,
+      "notes": "✅ No false positives"
+    },
+    "sql_injection": {
+      "name": "SQL Injection",
+      "total": 20,
+      "blocked": 20,
+      "passed": 0,
+      "block_rate": 100,
+      "ident_ok": 20,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true
+    },
+    "webshell_upload": {
+      "name": "WebShell Upload",
+      "total": 8,
+      "blocked": 8,
+      "passed": 0,
+      "block_rate": 100,
+      "ident_ok": 8,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true
+    },
+    "xss": {
+      "name": "XSS",
+      "total": 20,
+      "blocked": 20,
+      "passed": 0,
+      "block_rate": 100,
+      "ident_ok": 20,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true
+    }
+  },
+  "overall_pass": false,
+  "pass_rate": 80,
+  "risk_assessment": "MEDIUM - Most items passed, some need attention",
+  "admin_stats_before": {
+    "active_connections": 0,
+    "allowed_requests": 12,
+    "blacklisted_ips": 0,
+    "blocked_requests": 1080,
+    "brute_force_blocks": 43,
+    "cc_blocks": 80,
+    "ddos_blocks": 788,
+    "sql_injections": 30,
+    "timestamp": "2026-05-02T12:44:34Z",
+    "total_requests": 1092,
+    "webshell_uploads": 25,
+    "xss_attempts": 33
+  },
+  "admin_stats_after": {
+    "active_connections": 0,
+    "allowed_requests": 13,
+    "blacklisted_ips": 0,
+    "blocked_requests": 2562,
+    "brute_force_blocks": 56,
+    "cc_blocks": 80,
+    "ddos_blocks": 2056,
+    "sql_injections": 50,
+    "timestamp": "2026-05-02T12:45:14Z",
+    "total_requests": 2575,
+    "webshell_uploads": 33,
+    "xss_attempts": 53
+  }
+}

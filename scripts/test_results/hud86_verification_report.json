@@ -1,0 +1,127 @@
+{
+  "timestamp": "2026-05-02T09:14:57Z",
+  "issue": "HUD-86",
+  "summary": {
+    "brute_force": {
+      "name": "Brute Force",
+      "total": 15,
+      "blocked": 10,
+      "passed": 5,
+      "block_rate": 66.66666666666666,
+      "ident_ok": 10,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true,
+      "notes": "first blocked at req #6"
+    },
+    "cc_attack": {
+      "name": "CC Attack",
+      "total": 100,
+      "blocked": 70,
+      "passed": 30,
+      "block_rate": 70,
+      "ident_ok": 70,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true,
+      "notes": "detection works (ident=70/70), rate limited by config thresholds"
+    },
+    "ddos_attack": {
+      "name": "DDoS Attack",
+      "total": 360,
+      "blocked": 260,
+      "passed": 100,
+      "block_rate": 72.22222222222221,
+      "ident_ok": 260,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true,
+      "notes": "detection works (ident=260/260), increase volume for higher rate"
+    },
+    "mixed_bruteforce_sqli": {
+      "name": "Mixed BruteForce+SQLi",
+      "total": 22,
+      "blocked": 17,
+      "passed": 0,
+      "block_rate": 77.27272727272727,
+      "ident_ok": 17,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true,
+      "notes": "bf=7 sqli=10 bf_ok=7 sqli_ok=10"
+    },
+    "mixed_cc_ddos": {
+      "name": "Mixed CC+DDoS",
+      "total": 240,
+      "blocked": 110,
+      "passed": 0,
+      "block_rate": 45.83333333333333,
+      "ident_ok": 110,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true,
+      "notes": "cc=10 ddos=100 cc_ok=10 ddos_ok=100"
+    },
+    "normal_requests": {
+      "name": "Normal Requests",
+      "total": 8,
+      "blocked": 0,
+      "passed": 8,
+      "block_rate": 0,
+      "ident_ok": 8,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true
+    },
+    "sql_injection": {
+      "name": "SQL Injection",
+      "total": 20,
+      "blocked": 20,
+      "passed": 0,
+      "block_rate": 100,
+      "ident_ok": 20,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true
+    },
+    "webshell_upload": {
+      "name": "WebShell Upload",
+      "total": 8,
+      "blocked": 8,
+      "passed": 0,
+      "block_rate": 100,
+      "ident_ok": 8,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true
+    },
+    "xss": {
+      "name": "XSS",
+      "total": 20,
+      "blocked": 20,
+      "passed": 0,
+      "block_rate": 100,
+      "ident_ok": 20,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true
+    }
+  },
+  "overall_pass": true,
+  "pass_rate": 100,
+  "risk_assessment": "LOW - All verification items passed",
+  "admin_stats_final": {
+    "active_connections": 0,
+    "allowed_requests": 722,
+    "blacklisted_ips": 0,
+    "blocked_requests": 1148,
+    "brute_force_blocks": 12,
+    "cc_blocks": 170,
+    "ddos_blocks": 720,
+    "sql_injections": 90,
+    "timestamp": "2026-05-02T09:15:26Z",
+    "total_requests": 1870,
+    "webshell_uploads": 24,
+    "xss_attempts": 60
+  }
+}

@@ -143,7 +143,7 @@ var defaultXSSPatterns = []string{
 
 	// === Prototype pollution ===
 	`(?i)__proto__\s*[\[\.]`,
-	`(?i)constructor\s*\[\s*['"]prototype`,
+	`(?i)constructor\s*\[\s*['"]?prototype`,
 	`(?i)\.constructor\.constructor\s*\(`,
 }
 
@@ -177,12 +177,23 @@ func (x *Detector) InspectRequest(r *http.Request) (bool, string) {
 	return x.InspectRequestWithBody(r, nil)
 }
 
-// InspectRequestWithBody checks request parameters for XSS payloads.
+// InspectRequestWithBody checks request parameters, HTTP headers, and cookies
+// for XSS payloads.
 func (x *Detector) InspectRequestWithBody(r *http.Request, bodyBytes []byte) (bool, string) {
 	if !x.enabled {
 		return false, ""
 	}
+
+	// Combine all targets from query params, body, headers, and cookies
 	targets := common.CollectParamsWithBody(r, bodyBytes)
+	targets = append(targets, common.CollectHeaders(r)...)
+	targets = append(targets, common.CollectCookies(r)...)
+
+	return x.checkTargets(targets, r)
+}
+
+// checkTargets runs all patterns against a list of target strings.
+func (x *Detector) checkTargets(targets []string, r *http.Request) (bool, string) {
 	x.mu.RLock()
 	patterns := x.patterns
 	x.mu.RUnlock()

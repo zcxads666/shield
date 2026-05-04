@@ -492,3 +492,137 @@ func TestXSSDetector_ReloadInvalidPattern(t *testing.T) {
 	x.ReloadPatterns([]string{`[invalid(`})
 	// Should not panic and should still have old patterns (actually empty after reload of invalid)
 }
+
+func TestXSSDetector_HeaderDetection(t *testing.T) {
+	log, _ := logger.New("warn", "json", "")
+	x := NewDetector(true, "block", false, log)
+
+	cases := []struct {
+		name   string
+		header string
+		value  string
+	}{
+		{"User-Agent XSS", "User-Agent", "<script>alert(1)</script>"},
+		{"Referer XSS", "Referer", "http://evil.com/<img src=x onerror=alert(1)>"},
+		{"X-Forwarded-For XSS", "X-Forwarded-For", "127.0.0.1' onload='alert(1)"},
+		{"Custom header XSS", "X-Custom-Header", "javascript:alert(document.cookie)"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			u, _ := url.Parse("http://example.com/?q=normal")
+			r := &http.Request{URL: u, Method: "GET", Header: make(http.Header)}
+			r.Header.Set(c.header, c.value)
+			matched, pat := x.InspectRequest(r)
+			if !matched {
+				t.Errorf("header XSS not detected via %s: %s", c.header, c.value)
+			} else {
+				t.Logf("header %s detected by: %s", c.header, pat)
+			}
+		})
+	}
+}
+
+func TestXSSDetector_CookieDetection(t *testing.T) {
+	log, _ := logger.New("warn", "json", "")
+	x := NewDetector(true, "block", false, log)
+
+	cases := []struct {
+		name  string
+		value string
+	}{
+		{"Cookie XSS script", "<script>alert(1)</script>"},
+		{"Cookie XSS img onerror", "<img src=x onerror=alert(document.cookie)>"},
+		{"Cookie XSS svg onload", "<svg onload=alert(1)>"},
+		{"Cookie XSS javascript", "javascript:eval('alert(1)')"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			u, _ := url.Parse("http://example.com/?q=normal")
+			r := &http.Request{URL: u, Method: "GET", Header: make(http.Header)}
+			r.AddCookie(&http.Cookie{Name: "tracking", Value: c.value})
+			matched, pat := x.InspectRequest(r)
+			if !matched {
+				t.Errorf("cookie XSS not detected: %s", c.value)
+			} else {
+				t.Logf("cookie detected by: %s", pat)
+			}
+		})
+	}
+}
+
+func TestXSSDetector_HeaderNormalInputs(t *testing.T) {
+	log, _ := logger.New("warn", "json", "")
+	x := NewDetector(true, "block", false, log)
+
+	u, _ := url.Parse("http://example.com/?q=hello")
+	r := &http.Request{URL: u, Method: "GET", Header: make(http.Header)}
+	r.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	r.Header.Set("Referer", "https://www.google.com/search?q=test")
+	r.Header.Set("X-Forwarded-For", "192.168.1.1")
+	r.AddCookie(&http.Cookie{Name: "session", Value: "abc123def456"})
+
+	matched, pat := x.InspectRequest(r)
+	if matched {
+		t.Errorf("false positive on normal headers: %s", pat)
+	}
+}
+
+func TestXSSDetector_EntityBypassNoSemicolon(t *testing.T) {
+	log, _ := logger.New("warn", "json", "")
+	x := NewDetector(true, "block", false, log)
+
+	cases := []string{
+		// Decimal entities without closing semicolons
+		`&#60script&#62alert(1)&#60/script&#62`,
+		// Hex entities without closing semicolons
+		`&#x3Cscript&#x3Ealert(1)&#x3C/script&#x3E`,
+		// Decimal entity, img tag with onerror
+		`&#60img src=x onerror=alert(1)&#62`,
+		// Hex entity, iframe tag
+		`&#x3Ciframe src=javascript:alert(1)&#x3E`,
+		// Mixed: decimal entities for <script> with actual content
+		`&#60script&#62document.cookie&#60/script&#62`,
+	}
+
+	for _, payload := range cases {
+		t.Run(payload[:min(25, len(payload))], func(t *testing.T) {
+			u, _ := url.Parse("http://example.com/?x=" + url.QueryEscape(payload))
+			r := &http.Request{URL: u, Method: "GET"}
+			matched, pat := x.InspectRequest(r)
+			if !matched {
+				t.Errorf("entity bypass not detected: %s", payload)
+			} else {
+				t.Logf("entity bypass detected by: %s", pat)
+			}
+		})
+	}
+}
+
+func TestXSSDetector_ConstructorBracketAccess(t *testing.T) {
+	log, _ := logger.New("warn", "json", "")
+	x := NewDetector(true, "block", false, log)
+
+	cases := []string{
+		// Bracket access without quotes on prototype
+		`constructor[prototype][test]=1`,
+		// Another common payload variant
+		`constructor[prototype][isAdmin]=true`,
+		// Object property access chain
+		`x.constructor[prototype]`,
+	}
+
+	for _, payload := range cases {
+		t.Run(payload[:min(25, len(payload))], func(t *testing.T) {
+			u, _ := url.Parse("http://example.com/?x=" + url.QueryEscape(payload))
+			r := &http.Request{URL: u, Method: "GET"}
+			matched, pat := x.InspectRequest(r)
+			if !matched {
+				t.Errorf("constructor bracket access not detected: %s", payload)
+			} else {
+				t.Logf("constructor bracket detected by: %s", pat)
+			}
+		})
+	}
+}

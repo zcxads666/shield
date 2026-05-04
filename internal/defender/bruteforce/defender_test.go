@@ -537,3 +537,29 @@ func TestBruteForceDefender_BlockDurationApplied(t *testing.T) {
 		t.Error("should stay blocked within block duration")
 	}
 }
+
+func TestBruteForceDefender_Status502DoubleCount(t *testing.T) {
+	log, _ := logger.New("warn", "json", "stderr")
+	b := NewDefender(true, 4, 60, 300, []string{"/login"}, nil, log)
+	ip := "1.2.3.4"
+	path := "/login"
+
+	// 502 counts double — 2 occurrences = 4 counts, triggers block at threshold 4
+	b.RecordFailure(ip, path, 502)
+	b.RecordFailure(ip, path, 502)
+	if !b.ShouldBlock(ip, path) {
+		t.Error("502 errors should be double-counted, 2 should trigger block at threshold 4")
+	}
+}
+
+func TestBruteForceDefender_Status502SingleNotBlock(t *testing.T) {
+	log, _ := logger.New("warn", "json", "stderr")
+	b := NewDefender(true, 4, 60, 300, []string{"/login"}, nil, log)
+	ip := "1.2.3.4"
+	path := "/login"
+
+	b.RecordFailure(ip, path, 502)
+	if b.ShouldBlock(ip, path) {
+		t.Error("single 502 should not trigger block at threshold 4 (count=2)")
+	}
+}

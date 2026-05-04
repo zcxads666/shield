@@ -1,0 +1,366 @@
+{
+  "timestamp": "2026-05-03T01:19:37Z",
+  "issue": "HUD-119",
+  "title": "Round 21 Regression - CC Detection Module (HUD-117) Verification",
+  "summary": {
+    "brute_force": {
+      "name": "Brute Force",
+      "total": 15,
+      "blocked": 13,
+      "passed": 2,
+      "block_rate": 86.66666666666667,
+      "ident_ok": 13,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true,
+      "notes": "first blocked at req #3"
+    },
+    "cc_distributed": {
+      "name": "CC Distributed",
+      "total": 240,
+      "blocked": 21,
+      "passed": 219,
+      "block_rate": 8.75,
+      "ident_ok": 0,
+      "ident_wrong": 21,
+      "ident_accuracy": 0,
+      "wrong_items": [
+        {
+          "payload": "IP 10.3.0.110 GET /cc-distrib/api/data",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "wrong label for distributed CC"
+        },
+        {
+          "payload": "IP 10.3.0.111 GET /cc-distrib/api/data",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "wrong label for distributed CC"
+        },
+        {
+          "payload": "IP 10.3.0.112 GET /cc-distrib/api/data",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "wrong label for distributed CC"
+        },
+        {
+          "payload": "IP 10.3.0.114 GET /cc-distrib/api/data",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "wrong label for distributed CC"
+        },
+        {
+          "payload": "IP 10.3.0.113 GET /cc-distrib/api/data",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "wrong label for distributed CC"
+        },
+        {
+          "payload": "IP 10.3.0.115 GET /cc-distrib/api/data",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "wrong label for distributed CC"
+        },
+        {
+          "payload": "IP 10.3.0.117 GET /cc-distrib/api/data",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "wrong label for distributed CC"
+        },
+        {
+          "payload": "IP 10.3.0.118 GET /cc-distrib/api/data",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "wrong label for distributed CC"
+        },
+        {
+          "payload": "IP 10.3.0.116 GET /cc-distrib/api/data",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "wrong label for distributed CC"
+        },
+        {
+          "payload": "IP 10.3.0.117 GET /cc-distrib/api/data",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "wrong label for distributed CC"
+        },
+        {
+          "payload": "IP 10.3.0.118 GET /cc-distrib/api/data",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "wrong label for distributed CC"
+        },
+        {
+          "payload": "IP 10.3.0.6 GET /cc-distrib/api/data",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "wrong label for distributed CC"
+        },
+        {
+          "payload": "IP 10.3.0.17 GET /cc-distrib/api/data",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "wrong label for distributed CC"
+        },
+        {
+          "payload": "IP 10.3.0.5 GET /cc-distrib/api/data",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "wrong label for distributed CC"
+        },
+        {
+          "payload": "IP 10.3.0.9 GET /cc-distrib/api/data",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "wrong label for distributed CC"
+        },
+        {
+          "payload": "IP 10.3.0.23 GET /cc-distrib/api/data",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "wrong label for distributed CC"
+        },
+        {
+          "payload": "IP 10.3.0.7 GET /cc-distrib/api/data",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "wrong label for distributed CC"
+        },
+        {
+          "payload": "IP 10.3.0.14 GET /cc-distrib/api/data",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "wrong label for distributed CC"
+        },
+        {
+          "payload": "IP 10.3.0.10 GET /cc-distrib/api/data",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "wrong label for distributed CC"
+        },
+        {
+          "payload": "IP 10.3.0.15 GET /cc-distrib/api/data",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "wrong label for distributed CC"
+        },
+        {
+          "payload": "IP 10.3.0.4 GET /cc-distrib/api/data",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:http_flood",
+          "http_code": 429,
+          "issue": "wrong label for distributed CC"
+        }
+      ],
+      "passed_check": false,
+      "notes": "OK: distributed CC detected (21 blocks)"
+    },
+    "cc_humanlike_tool": {
+      "name": "CC Human-like Tool",
+      "total": 55,
+      "blocked": 25,
+      "passed": 30,
+      "block_rate": 45.45454545454545,
+      "ident_ok": 18,
+      "ident_wrong": 7,
+      "ident_accuracy": 72,
+      "wrong_items": [
+        {
+          "payload": "GET /cc-human/page?id=12",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "wrong label for CC with human-like headers"
+        },
+        {
+          "payload": "GET /cc-human/page?id=12",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "wrong label for CC with human-like headers"
+        },
+        {
+          "payload": "GET /cc-human/page?id=12",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "wrong label for CC with human-like headers"
+        },
+        {
+          "payload": "GET /cc-human/page?id=12",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "wrong label for CC with human-like headers"
+        },
+        {
+          "payload": "GET /cc-human/page?id=13",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "wrong label for CC with human-like headers"
+        },
+        {
+          "payload": "GET /cc-human/page?id=13",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "wrong label for CC with human-like headers"
+        },
+        {
+          "payload": "GET /cc-human/page?id=13",
+          "expected_type": "cc_attack",
+          "actual_type": "ddos_attack:syn_flood",
+          "http_code": 429,
+          "issue": "wrong label for CC with human-like headers"
+        }
+      ],
+      "passed_check": false,
+      "notes": "LABEL LEAK: 7 blocks mislabeled"
+    },
+    "cc_normal_same_ip": {
+      "name": "CC Normal Same IP",
+      "total": 6,
+      "blocked": 0,
+      "passed": 6,
+      "block_rate": 0,
+      "ident_ok": 6,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true,
+      "notes": "OK: No false positives after CC activity subsides"
+    },
+    "cc_repeat_offender": {
+      "name": "CC Repeat Offender",
+      "total": 10,
+      "blocked": 0,
+      "passed": 10,
+      "block_rate": 0,
+      "ident_ok": 0,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": false,
+      "notes": "WARN: Repeat offender not blocked. IP reputation not working"
+    },
+    "cc_simple_tool": {
+      "name": "CC Simple Tool",
+      "total": 35,
+      "blocked": 5,
+      "passed": 30,
+      "block_rate": 14.285714285714285,
+      "ident_ok": 5,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": false,
+      "notes": "OK: 5 blocks, all cc_attack"
+    },
+    "cc_slow": {
+      "name": "CC Slow Rate",
+      "total": 60,
+      "blocked": 40,
+      "passed": 20,
+      "block_rate": 66.66666666666666,
+      "ident_ok": 40,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true,
+      "notes": "OK: slow CC detected (40 blocks, 67%)"
+    },
+    "ddos_goldeneye": {
+      "name": "DDoS GoldenEye",
+      "total": 450,
+      "blocked": 450,
+      "passed": 0,
+      "block_rate": 100,
+      "ident_ok": 450,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true,
+      "notes": "OK: All 450 blocks correctly ddos_attack"
+    },
+    "ddos_http_flood": {
+      "name": "DDoS HTTP Flood",
+      "total": 400,
+      "blocked": 400,
+      "passed": 0,
+      "block_rate": 100,
+      "ident_ok": 400,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true,
+      "notes": "OK: All 400 blocks correctly ddos_attack"
+    },
+    "normal_fp": {
+      "name": "Normal Requests FP",
+      "total": 10,
+      "blocked": 0,
+      "passed": 10,
+      "block_rate": 0,
+      "ident_ok": 10,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true,
+      "notes": "OK: No false positives on normal traffic"
+    },
+    "sql_injection": {
+      "name": "SQL Injection",
+      "total": 20,
+      "blocked": 20,
+      "passed": 0,
+      "block_rate": 100,
+      "ident_ok": 20,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true,
+      "notes": "OK: All SQLi blocked with correct labels"
+    },
+    "webshell_upload": {
+      "name": "WebShell Upload",
+      "total": 9,
+      "blocked": 9,
+      "passed": 0,
+      "block_rate": 100,
+      "ident_ok": 9,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true,
+      "notes": "OK: All webshells blocked"
+    },
+    "xss": {
+      "name": "XSS",
+      "total": 20,
+      "blocked": 20,
+      "passed": 0,
+      "block_rate": 100,
+      "ident_ok": 20,
+      "ident_wrong": 0,
+      "ident_accuracy": 100,
+      "passed_check": true,
+      "notes": "OK: All XSS blocked with correct labels"
+    }
+  },
+  "overall_pass": false,
+  "pass_rate": 69.23076923076923,
+  "risk_assessment": "HIGH - CC regression failures require attention before declaring success"
+}

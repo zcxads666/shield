@@ -39,9 +39,9 @@ func TestMetrics_Increment(t *testing.T) {
 		t.Fatalf("expected bruteforce=1, got %d", m.BruteForceBlocks)
 	}
 
-	m.IncDDoSBlocks()
-	if m.DDoSBlocks != 1 {
-		t.Fatalf("expected ddos=1, got %d", m.DDoSBlocks)
+	m.IncDDoSCCBlocks()
+	if m.DDoSCCBlocks != 1 {
+		t.Fatalf("expected ddos_cc=1, got %d", m.DDoSCCBlocks)
 	}
 }
 

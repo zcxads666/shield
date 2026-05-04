@@ -14,19 +14,38 @@ proxy:
 
 rate_limit:
   enabled: true
-  requests_per_second: 100
-  burst_size: 300
+  requests_per_second: 25
+  burst_size: 30
   block_duration_sec: 300
 
-ddos:
+ddos_cc:
   enabled: true
-  max_connections_per_ip: 1000
+  requests_per_second: 25
+  burst_size: 30
+  max_connections_per_ip: 100
   slowloris_timeout_ms: 30000
-  challenge_threshold: 500
-cc:
-  enabled: true
-  max_requests: 100
+  global_rate_danger_threshold: 50
+  global_rate_distributed_threshold: 22
+  global_distributed_path_threshold: 30
+  global_concentrated_path_threshold: 3
+  max_requests: 200
+  burst_requests: 300
   window_sec: 60
+  behavior_score_threshold: 70
+  behavior_block_threshold: 30
+  path_ip_threshold: 50
+  path_avg_req_threshold: 3
+  path_time_window_sec: 600
+  suspicion_block_threshold: 80
+  suspicion_challenge_threshold: 50
+  block_duration_sec: 86400
+  block_acceleration: 1.5
+  max_block_count: 3
+  js_challenge_enabled: true
+  captcha_challenge_enabled: true
+  env_fingerprint_enabled: true
+  pow_challenge_enabled: true
+  pow_difficulty: 4
 
 sql_inject:
   enabled: true
@@ -45,16 +64,24 @@ upload:
 
 brute_force:
   enabled: true
-  max_failures: 5
+  max_failures: 3
   window_sec: 60
   block_duration_sec: 600
   protected_paths:
     - /login
-    - /api/auth
     - /admin
-  status_codes:
-    - 401
-    - 403
+    - /wp-login
+    - /api/login
+    - /api/auth
+    - /signin
+    - /auth
+    - /oauth
+    - /api/v1/login
+    - /api/v1/auth
+    - /user/login
+    - /users/login
+    - /account/login
+  status_codes: []
 
 blacklist:
   enabled: true
@@ -79,3 +106,11 @@ rules:
   rules_path: "./data/rules.yaml"
   hot_reload: true
   reload_interval_sec: 3
+
+waiting_room:
+  enabled: false
+  max_queue_size: 5000
+  release_per_sec: 5.0
+  session_ttl_sec: 300
+  queue_timeout_sec: 300
+  active_threshold: 40.0

@@ -11,13 +11,13 @@ proxy:
 
 rate_limit:
   enabled: true
-  requests_per_second: 50
-  burst_size: 50
+  requests_per_second: 25
+  burst_size: 30
   block_duration_sec: 300
 
 ddos:
   enabled: true
-  max_connections_per_ip: 50
+  max_connections_per_ip: 100
   slowloris_timeout_ms: 30000
   challenge_threshold: 100
 

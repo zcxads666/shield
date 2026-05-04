@@ -34,7 +34,7 @@ rate_limit:
 	if cfg.RateLimit.RequestsPerSecond != 50 {
 		t.Fatalf("unexpected rps: %d", cfg.RateLimit.RequestsPerSecond)
 	}
-	if cfg.RateLimit.BurstSize != 150 { // default burst
+	if cfg.RateLimit.BurstSize != 30 { // default burst
 		t.Fatalf("unexpected burst: %d", cfg.RateLimit.BurstSize)
 	}
 }

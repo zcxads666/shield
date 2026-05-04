@@ -205,9 +205,9 @@ func (b *Defender) RecordFailure(ip, path string, statusCode int) {
 		return
 	}
 
-	// 501 errors get higher sensitivity — double count
+	// 501/502 errors get higher sensitivity (double count). 502 often means probing non-existent endpoints.
 	multiplier := 1
-	if statusCode == 501 {
+	if statusCode == 501 || statusCode == 502 {
 		multiplier = 2
 	}
 

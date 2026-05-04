@@ -12,6 +12,44 @@ func CollectParams(r *http.Request) []string {
 	return CollectParamsWithBody(r, nil)
 }
 
+// CollectHeaders focuses on headers commonly exploited for injection and XSS.
+func CollectHeaders(r *http.Request) []string {
+	var vals []string
+	headers := []string{
+		"User-Agent", "Referer", "X-Forwarded-For", "X-Real-IP",
+		"X-Forwarded-Host", "X-Forwarded-Proto", "X-Forwarded-Port",
+		"X-Forwarded-Server", "X-Forwarded-Prefix", "X-Http-Method-Override",
+		"X-Original-URL", "X-Rewrite-URL", "X-Custom-IP-Authorization",
+		"X-Client-IP", "True-Client-IP", "Cf-Connecting-Ip",
+		"Accept-Language", "Origin", "Host",
+	}
+	for _, h := range headers {
+		if v := r.Header.Get(h); v != "" {
+			vals = append(vals, v)
+		}
+	}
+	// Also scan all header values for comprehensive detection
+	for _, vv := range r.Header {
+		for _, v := range vv {
+			vals = append(vals, v)
+		}
+	}
+	return vals
+}
+
+// CollectCookies returns all cookie values from the request, as well as the
+// raw Cookie header.
+func CollectCookies(r *http.Request) []string {
+	var vals []string
+	for _, c := range r.Cookies() {
+		vals = append(vals, c.Value)
+	}
+	if raw := r.Header.Get("Cookie"); raw != "" {
+		vals = append(vals, raw)
+	}
+	return vals
+}
+
 // collectParamsWithBody extracts all parameter values from the request,
 // including URL query, POST form, and raw body bytes as fallback.
 func CollectParamsWithBody(r *http.Request, bodyBytes []byte) []string {
@@ -49,8 +87,8 @@ var (
 	entityStart   = regexp.MustCompile(`^#\d+;|^#x[0-9a-fA-F]+;`)
 	normReHex     = regexp.MustCompile(`\\x([0-9a-fA-F]{2})`)
 	normReUnicode = regexp.MustCompile(`\\u([0-9a-fA-F]{4})`)
-	normReDec     = regexp.MustCompile(`&#(\d+);`)
-	normReHexEnt  = regexp.MustCompile(`&#x([0-9a-fA-F]+);`)
+	normReDec     = regexp.MustCompile(`&#(\d{2,5});?`)
+	normReHexEnt  = regexp.MustCompile(`&#x([0-9a-fA-F]{2,4});?`)
 	normReUXXXX   = regexp.MustCompile(`%u([0-9a-fA-F]{4})`)
 )
 
