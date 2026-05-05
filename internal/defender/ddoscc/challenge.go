@@ -4,8 +4,10 @@ import (
 	"crypto/hmac"
 	crand "crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -63,6 +65,10 @@ type ChallengeManager struct {
 	states    map[string]*ChallengeState
 	secretKey []byte
 	maxStates int
+	// graceMap tracks per-IP last challenge pass time for grace period.
+	// IPs that recently passed a challenge are exempt from re-challenge
+	// to prevent infinite challenge loops during IP drift or unstable networks.
+	graceMap map[string]time.Time
 }
 
 // NewChallengeManager creates a new challenge manager.
@@ -71,6 +77,7 @@ func NewChallengeManager(secretKey string, maxStates int) *ChallengeManager {
 		states:    make(map[string]*ChallengeState),
 		secretKey: []byte(secretKey),
 		maxStates: maxStates,
+		graceMap:  make(map[string]time.Time),
 	}
 }
 
@@ -144,6 +151,28 @@ func (cm *ChallengeManager) RecordChallengeResult(sessionID string, passed bool)
 	return state.Level
 }
 
+// RecordGracePass records that an IP successfully passed a challenge, granting
+// a grace period during which re-challenges are suppressed. This prevents
+// infinite challenge loops for users on unstable networks with IP drift.
+func (cm *ChallengeManager) RecordGracePass(ip string) {
+	cm.mu.Lock()
+	cm.graceMap[ip] = time.Now()
+	cm.mu.Unlock()
+}
+
+// IsInGracePeriod returns true if the IP passed a challenge recently and should
+// not be re-challenged yet. This gives legitimate users on unstable networks
+// (mobile IP drift, carrier-grade NAT) a window of normal access.
+func (cm *ChallengeManager) IsInGracePeriod(ip string) bool {
+	cm.mu.RLock()
+	lastPass, ok := cm.graceMap[ip]
+	cm.mu.RUnlock()
+	if !ok {
+		return false
+	}
+	return time.Since(lastPass) < challengeGracePeriod
+}
+
 // EscalateLevel raises the challenge level for repeat offenders.
 func (cm *ChallengeManager) EscalateLevel(sessionID string, currentLevel ChallengeLevel) ChallengeLevel {
 	cm.mu.Lock()
@@ -170,7 +199,10 @@ func (cm *ChallengeManager) EscalateLevel(sessionID string, currentLevel Challen
 // GenerateChallengeCookie creates a signed session cookie for challenge tracking.
 func (cm *ChallengeManager) GenerateChallengeCookie(ip string) string {
 	b := make([]byte, 16)
-	crand.Read(b)
+	if _, err := crand.Read(b); err != nil {
+		log.Printf("challenge random read failed: %v", err)
+		panic("crypto/rand: insufficient entropy")
+	}
 	sessionID := hex.EncodeToString(b)
 
 	mac := hmac.New(sha256.New, cm.secretKey)
@@ -201,7 +233,10 @@ func (cm *ChallengeManager) VerifyChallengeCookie(cookie, ip string) (string, bo
 // GenerateJSChallengeHTML returns a JS challenge page.
 func (cm *ChallengeManager) GenerateJSChallengeHTML(sessionID, originalURL string) string {
 	b := make([]byte, 16)
-	crand.Read(b)
+	if _, err := crand.Read(b); err != nil {
+		log.Printf("challenge random read failed: %v", err)
+		panic("crypto/rand: insufficient entropy")
+	}
 	challengeToken := hex.EncodeToString(b)
 
 	mac := hmac.New(sha256.New, cm.secretKey)
@@ -264,7 +299,7 @@ func (cm *ChallengeManager) RestoreSession(sessionID string) {
 	}
 }
 
-// Cleanup removes expired challenge states.
+// Cleanup removes expired challenge states and grace period entries.
 // Sessions where the user has passed at least one challenge are kept for
 // a much longer TTL (cookieMaxAge) to avoid re-challenging legitimate users.
 func (cm *ChallengeManager) Cleanup(maxAge time.Duration) {
@@ -288,6 +323,14 @@ func (cm *ChallengeManager) Cleanup(maxAge time.Duration) {
 			delete(cm.states, key)
 		}
 	}
+
+	// Cleanup grace period entries older than the grace window.
+	graceCutoff := time.Now().Add(-challengeGracePeriod * 2)
+	for ip, lastPass := range cm.graceMap {
+		if lastPass.Before(graceCutoff) {
+			delete(cm.graceMap, ip)
+		}
+	}
 }
 
 func generateJSChallengePage(token, expectedAnswer, sessionID, originalURL string) string {
@@ -304,13 +347,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;align-
 @keyframes s{to{transform:rotate(360deg)}}
 h1{font-size:18px;margin:0}
 p{font-size:13px;color:#666}
+.retry{display:none;margin-top:16px;padding:10px 24px;font-size:14px;background:#4285f4;color:#fff;border:none;border-radius:4px;cursor:pointer}
+.retry:hover{background:#3367d6}
+.hint{display:none;font-size:12px;color:#999;margin-top:12px}
 </style>
 </head>
 <body>
 <div class="card">
 <h1>Verifying your browser</h1>
-<div class="spinner"></div>
+<div class="spinner" id="spinner"></div>
 <p id="msg">Please wait a moment...</p>
+<button class="retry" id="retry" onclick="location.reload()">Retry</button>
+<p class="hint" id="hint">If this page keeps appearing, your network may be unstable. Try switching to a more stable connection or waiting a moment before refreshing.</p>
 </div>
 <script>
 (function(){
@@ -319,7 +367,18 @@ p{font-size:13px;color:#666}
 	var raw=_t+":"+d+":"+n.length+":"+w;
 	var sep=_u.indexOf("?")>=0?"&":"?";
 	var redir=_u+sep+"__shield_verify="+encodeURIComponent(_e)+"&__shield_token="+encodeURIComponent(_t)+"&__shield_sid="+encodeURIComponent(_s);
-	setTimeout(function(){window.location.href=redir},800+Math.floor(Math.random()*400));
+	var _done=false;
+	function go(){if(!_done){_done=true;window.location.href=redir}}
+	setTimeout(go,800+Math.floor(Math.random()*400));
+	// Show retry if redirect hasn't happened after 8 seconds (weak network)
+	setTimeout(function(){
+		if(!_done){
+			document.getElementById("spinner").style.display="none";
+			document.getElementById("msg").textContent="Verification is taking longer than expected.";
+			document.getElementById("retry").style.display="inline-block";
+			document.getElementById("hint").style.display="block";
+		}
+	},8000);
 })();
 </script>
 </body>
@@ -404,7 +463,10 @@ func (cm *ChallengeManager) VerifyCaptchaAnswer(sessionID, answerStr, sig string
 // send it as __shield_verify — no pre-computed signature is embedded in the page.
 func (cm *ChallengeManager) GenerateEnvFingerprintHTML(sessionID, originalURL string) string {
 	b := make([]byte, 16)
-	crand.Read(b)
+	if _, err := crand.Read(b); err != nil {
+		log.Printf("challenge random read failed: %v", err)
+		panic("crypto/rand: insufficient entropy")
+	}
 	verificationToken := hex.EncodeToString(b)
 
 	cm.mu.Lock()
@@ -427,13 +489,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;align-
 @keyframes s{to{transform:rotate(360deg)}}
 h1{font-size:18px;margin:0}
 p{font-size:13px;color:#666}
+.retry{display:none;margin-top:16px;padding:10px 24px;font-size:14px;background:#4285f4;color:#fff;border:none;border-radius:4px;cursor:pointer}
+.retry:hover{background:#3367d6}
+.hint{display:none;font-size:12px;color:#999;margin-top:12px}
 </style>
 </head>
 <body>
 <div class="card">
 <h1>Verifying your browser</h1>
-<div class="spinner"></div>
+<div class="spinner" id="spinner"></div>
 <p id="msg">Checking browser environment...</p>
+<button class="retry" id="retry" onclick="location.reload()">Retry</button>
+<p class="hint" id="hint">If this page keeps appearing, your network may be unstable. Try switching to a more stable connection or waiting a moment before refreshing.</p>
 </div>
 <canvas id="fp_canvas" style="display:none"></canvas>
 <canvas id="fp_webgl" style="display:none"></canvas>
@@ -513,7 +580,9 @@ p{font-size:13px;color:#666}
 
 	var sep=_u.indexOf("?")>=0?"&":"?";
 
+	var _done=false;
 	function doRedirect(verifyHash){
+		if(_done)return;_done=true;
 		var redir=_u+sep+"__shield_verify="+encodeURIComponent(verifyHash)+
 			"&__shield_token="+encodeURIComponent(_t)+
 			"&__shield_sid="+encodeURIComponent(_s)+
@@ -531,22 +600,40 @@ p{font-size:13px;color:#666}
 	}else{
 		doRedirect(hash(hInput));
 	}
-})();
+})
+	// Show retry if redirect hasn't happened after 10 seconds (weak network / slow crypto)
+	setTimeout(function(){
+		if(!_done){
+			document.getElementById("spinner").style.display="none";
+			document.getElementById("msg").textContent="Verification is taking longer than expected.";
+			document.getElementById("retry").style.display="inline-block";
+			document.getElementById("hint").style.display="block";
+		}
+	},10000);
+	})();
 </script>
 </body>
 </html>`, sessionID, originalURL, verificationToken)
 }
 
 // VerifyEnvFingerprint validates a Stage 1 environment fingerprint response.
-// The client must have computed SHA-256(token + "|" + fpData) and sent it as __shield_verify.
-// We re-compute the hash here and compare — this binds the verification to the actual
-// fingerprint data so an attacker cannot simply replay a pre-computed signature.
-func (cm *ChallengeManager) VerifyEnvFingerprint(sessionID, token, fingerprintHash, fpData string) bool {
+// The client computes SHA-256(token + "|" + base64(fpData)) and sends it as __shield_verify.
+// We re-compute the hash over the base64-encoded fpData (matching the client) and compare.
+func (cm *ChallengeManager) VerifyEnvFingerprint(sessionID, token, fingerprintHash, fpDataB64 string) bool {
 	_ = sessionID // kept for API compatibility; token binds to fpData via client hash
-	expectedHash := sha256Hex(token + "|" + fpData)
+
+	// Client hashes token + "|" + base64(fpData) — match that exactly.
+	expectedHash := sha256Hex(token + "|" + fpDataB64)
 	if fingerprintHash != expectedHash {
 		return false
 	}
+
+	// Decode base64 to get raw fpStr for fingerprint validation.
+	fpDataBytes, err := base64.StdEncoding.DecodeString(fpDataB64)
+	if err != nil {
+		return false
+	}
+	fpData := string(fpDataBytes)
 
 	fpMap := make(map[string]string)
 	pairs := strings.Split(fpData, ";")
@@ -557,21 +644,42 @@ func (cm *ChallengeManager) VerifyEnvFingerprint(sessionID, token, fingerprintHa
 		}
 	}
 
-	if fpMap["webgl_renderer"] == "none" || fpMap["webgl_renderer"] == "err" || fpMap["webgl_renderer"] == "" {
-		return false
-	}
-
 	if fpMap["webdriver"] == "true" || fpMap["phantom"] == "true" || fpMap["selenium"] == "true" {
 		return false
 	}
 
-	return true
+	score := 0
+	if fpMap["webgl_renderer"] != "none" && fpMap["webgl_renderer"] != "err" && fpMap["webgl_renderer"] != "" {
+		score++
+	}
+	if fpMap["canvas"] != "" && fpMap["canvas"] != "err" {
+		score++
+	}
+	if fpMap["screen"] != "" {
+		score++
+	}
+	if fpMap["plugins"] != "" {
+		pluginCount := 0
+		if _, err := fmt.Sscanf(fpMap["plugins"], "%d", &pluginCount); err != nil {
+			pluginCount = 0
+		}
+		if pluginCount > 0 {
+			score++
+		}
+	}
+	if fpMap["language"] != "" {
+		score++
+	}
+	return score >= 2
 }
 
 // GeneratePoWHTML returns a Stage 2 Proof-of-Work challenge page.
 func (cm *ChallengeManager) GeneratePoWHTML(sessionID, originalURL string, difficulty int) string {
 	b := make([]byte, 16)
-	crand.Read(b)
+	if _, err := crand.Read(b); err != nil {
+		log.Printf("challenge random read failed: %v", err)
+		panic("crypto/rand: insufficient entropy")
+	}
 	challengeNonce := hex.EncodeToString(b)
 
 	cm.mu.Lock()
@@ -610,6 +718,7 @@ button:disabled{background:#ccc;cursor:not-allowed}
 <p id="status">Computing proof of work...</p>
 <div class="hash-display" id="hash"></div>
 <button id="btn" onclick="submitPoW()">Verify &amp; Continue</button>
+<p style="font-size:12px;color:#999;margin-top:12px">If verification is taking too long, your network may be unstable. Try refreshing the page or switching to a more stable connection.</p>
 </div>
 <script>
 (function(){
@@ -626,12 +735,21 @@ button:disabled{background:#ccc;cursor:not-allowed}
 	}
 
 	async function doWork(){
-		for(var n=0;n<_total;n+=50000){
-			var end=Math.min(n+50000,_total);
+		var batchSize=200;
+		for(var n=0;n<_total;n+=batchSize){
+			var end=Math.min(n+batchSize,_total);
+			var tasks=[];
 			for(var i=n;i<end;i++){
-				var h=await sha256hex(_nonce+":"+i+":"+_s);
-				if(h.startsWith(_prefix)){
-					_found=true;_result=h;_resultNonce=i;
+				(function(idx){
+					tasks.push(sha256hex(_nonce+":"+idx+":"+_s).then(function(h){
+						return {hash:h,nonce:idx};
+					}));
+				})(i);
+			}
+			var results=await Promise.all(tasks);
+			for(var j=0;j<results.length;j++){
+				if(results[j].hash.startsWith(_prefix)){
+					_found=true;_result=results[j].hash;_resultNonce=results[j].nonce;
 					return;
 				}
 			}
@@ -641,7 +759,16 @@ button:disabled{background:#ccc;cursor:not-allowed}
 	}
 
 	async function startWork(){
+		var _timeout=setTimeout(function(){
+			if(!_found){
+				document.getElementById("status").textContent="Verification timed out. Your network may be slow. Please refresh the page to try again.";
+				document.getElementById("btn").style.display="inline-block";
+				document.getElementById("btn").textContent="Refresh Page";
+				document.getElementById("btn").onclick=function(){location.reload()};
+			}
+		},30000);
 		doWork().then(function(){
+			clearTimeout(_timeout);
 			if(_found){
 				document.getElementById("status").textContent="Verification complete. Click below to continue.";
 				document.getElementById("bar").style.width="100%%";

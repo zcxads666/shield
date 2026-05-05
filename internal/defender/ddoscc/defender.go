@@ -4,6 +4,7 @@ import (
 	"math"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/shield/shield/internal/storage/blacklist"
@@ -88,6 +89,11 @@ type Detector struct {
 	// Per-IP token bucket violation tracking for graduated response
 	rateViolations   map[string]*rateViolation
 	rateViolationsMu sync.Mutex
+
+	// waitingRoomActive is set by the proxy when the waiting room is handling
+	// global flood traffic. When true, global rate checks are skipped since
+	// the waiting room provides the primary traffic control mechanism.
+	waitingRoomActive int32
 }
 
 // rateViolation tracks how many times an IP has exceeded the token bucket.
@@ -124,18 +130,18 @@ func NewDetector(cfg Config, log *logger.Logger) *Detector {
 	return d
 }
 
-// Check runs the unified DDoS/CC detection pipeline and returns the recommended action.
+// CheckEarly runs low-cost pre-body-read DDoS/CC checks (Layers 0–3).
+// These checks use only headers, cookies, and connection counters — no body
+// inspection — so they can safely run before io.ReadAll.  Cutting off
+// high-frequency attackers at this stage prevents them from wasting CPU on
+// body reads and content matching (the asymmetric resource-consumption attack).
 //
-// Detection order:
-//  Layer 0: Cookie bypass — valid __shield_cc → ActionAllow immediately
-//  Layer 1: Global rate detection — multi-IP flood? → challenge new users
-//  Layer 2: Token bucket — per-IP rate exceeded? → ActionBlock
-//  Layer 3: Connection limit + Slowloris → ActionBlock
-//  Layer 4: DDoS pattern (GoldenEye, HTTP Flood, SYN flood) → ActionBlock
-//  Layer 5: Per-IP sliding window → triggers challenge system
-//  Layer 6: UA rotation (>=4 UAs) → ActionBlock
-//  Layer 7: Behavior + reputation + path concentration → graduated response
-func (d *Detector) Check(r *http.Request) Action {
+// Layers:
+//  Layer 0: Cookie bypass recognition
+//  Layer 1: Global rate detection (multi-IP flood)
+//  Layer 2: Token bucket per-IP rate limit
+//  Layer 3: Connection limit + Slowloris detection
+func (d *Detector) CheckEarly(r *http.Request) Action {
 	if !d.enabled {
 		return ActionAllow
 	}
@@ -143,7 +149,7 @@ func (d *Detector) Check(r *http.Request) Action {
 	ip := blacklist.GetClientIP(r.RemoteAddr, r.Header, d.cfg.TrustForwarded)
 	path := d.requestPath(r)
 
-	// Record for pattern analysis
+	// Record metadata for pattern analysis (no body read — uses ContentLength header only).
 	bodySize := 0
 	if r.Body != nil {
 		bodySize = int(r.ContentLength)
@@ -152,15 +158,15 @@ func (d *Detector) Check(r *http.Request) Action {
 	d.recordRequest(ip, path, userAgent, bodySize)
 	d.trackBehavior(ip, path)
 
-	// Layer 0: Cookie recognition — proven users get elevated limits, not total bypass.
-	// This ensures normal users pass smoothly through all rate checks during attacks
-	// while preventing attackers from abusing a single acquired cookie.
+	// Layer 0: Cookie recognition
 	hasCookie := d.hasValidCookie(r)
 
-	// Layer 1: Global rate detection — cookie users skip (they already proved legitimacy).
-	// New users get challenged during multi-IP floods.
+	// Extract behavior fingerprint for global rate check.
+	fp := ExtractBehaviorFingerprint(r)
+
+	// Layer 1: Global rate detection
 	if !hasCookie {
-		if !d.checkGlobalRate(ip) {
+		if !d.checkGlobalRateWithBehavior(ip, fp) {
 			if d.cfg.EnvFingerprintEnabled {
 				return ActionEnvFingerprint
 			}
@@ -168,9 +174,7 @@ func (d *Detector) Check(r *http.Request) Action {
 		}
 	}
 
-	// Layer 2: Token bucket per-IP rate limit.
-	// Cookie users get elevated limits (4x) — legit users never exceed them,
-	// but attackers who acquired a cookie will trip and get re-challenged.
+	// Layer 2: Token bucket per-IP rate limit
 	if hasCookie {
 		if !d.cookieLimiter.Allow(ip) {
 			d.logWarn(ip, path, "cookie_rate_exceeded", 0)
@@ -189,9 +193,18 @@ func (d *Detector) Check(r *http.Request) Action {
 			})
 			switch {
 			case violCount >= 3:
-				suspicion.OnBlock(d.cfg.BlockAcceleration)
-				metrics.Get().IncDDoSCCBlocks()
-				return ActionBlock
+				if d.ipRequestRate(ip) > 50 {
+					suspicion.OnBlock(d.cfg.BlockAcceleration)
+					metrics.Get().IncDDoSCCBlocks()
+					return ActionBlock
+				}
+				if d.cfg.PoWChallengeEnabled {
+					return ActionPoWChallenge
+				}
+				if d.cfg.EnvFingerprintEnabled {
+					return ActionEnvFingerprint
+				}
+				return ActionJSChallenge
 			case violCount >= 2:
 				if d.cfg.PoWChallengeEnabled {
 					return ActionPoWChallenge
@@ -216,8 +229,7 @@ func (d *Detector) Check(r *http.Request) Action {
 	}
 
 	// Layer 3: Connection limit
-	if ok, attackType := d.checkConnectionLimit(ip); !ok {
-		_ = attackType
+	if ok, _ := d.checkConnectionLimit(ip); !ok {
 		return ActionBlock
 	}
 
@@ -228,6 +240,152 @@ func (d *Detector) Check(r *http.Request) Action {
 		return ActionBlock
 	}
 
+	return ActionAllow
+}
+
+// Check runs the full DDoS/CC detection pipeline (Layers 0–7) and returns
+// the recommended action.  For the split-pipeline use case (early + late),
+// call CheckEarly for Layers 0–3 before the body read, then CheckLate for
+// Layers 4–7 after content matching.
+//
+// Layers:
+//  Layer 0: Cookie bypass recognition
+//  Layer 1: Global rate detection (multi-IP flood)
+//  Layer 2: Token bucket per-IP rate limit
+//  Layer 3: Connection limit + Slowloris detection
+//  Layer 4: DDoS pattern (GoldenEye, HTTP Flood, SYN flood)
+//  Layer 5: Per-IP sliding window
+//  Layer 6: UA rotation (>=4 UAs)
+//  Layer 7: Behavior + reputation + path concentration
+func (d *Detector) Check(r *http.Request) Action {
+	if !d.enabled {
+		return ActionAllow
+	}
+
+	ip := blacklist.GetClientIP(r.RemoteAddr, r.Header, d.cfg.TrustForwarded)
+	path := d.requestPath(r)
+
+	// Record for pattern analysis
+	bodySize := 0
+	if r.Body != nil {
+		bodySize = int(r.ContentLength)
+	}
+	userAgent := r.Header.Get("User-Agent")
+	d.recordRequest(ip, path, userAgent, bodySize)
+	d.trackBehavior(ip, path)
+
+	// Layer 0: Cookie recognition
+	hasCookie := d.hasValidCookie(r)
+
+	// Extract behavior fingerprint early so global rate check can use it
+	// to differentiate normal browsers from bots during floods.
+	fp := ExtractBehaviorFingerprint(r)
+
+	// Layer 1: Global rate detection
+	if !hasCookie {
+		if !d.checkGlobalRateWithBehavior(ip, fp) {
+			if d.cfg.EnvFingerprintEnabled {
+				return ActionEnvFingerprint
+			}
+			return ActionJSChallenge
+		}
+	}
+
+	// Layer 2: Token bucket per-IP rate limit
+	if hasCookie {
+		if !d.cookieLimiter.Allow(ip) {
+			d.logWarn(ip, path, "cookie_rate_exceeded", 0)
+			if d.cfg.EnvFingerprintEnabled {
+				return ActionEnvFingerprint
+			}
+			return ActionJSChallenge
+		}
+	} else {
+		if violCount := d.checkTokenBucket(ip); violCount > 0 {
+			suspicion := d.reputation.GetOrCreate(ip)
+			suspicion.AddEvent(SuspicionEvent{
+				Time:   time.Now(),
+				Type:   "token_bucket_violation",
+				Weight: 15,
+			})
+			switch {
+			case violCount >= 3:
+				if d.ipRequestRate(ip) > 50 {
+					suspicion.OnBlock(d.cfg.BlockAcceleration)
+					metrics.Get().IncDDoSCCBlocks()
+					return ActionBlock
+				}
+				if d.cfg.PoWChallengeEnabled {
+					return ActionPoWChallenge
+				}
+				if d.cfg.EnvFingerprintEnabled {
+					return ActionEnvFingerprint
+				}
+				return ActionJSChallenge
+			case violCount >= 2:
+				if d.cfg.PoWChallengeEnabled {
+					return ActionPoWChallenge
+				}
+				if d.cfg.EnvFingerprintEnabled {
+					return ActionEnvFingerprint
+				}
+				return ActionJSChallenge
+			default:
+				if d.cfg.EnvFingerprintEnabled {
+					return ActionEnvFingerprint
+				}
+				if d.cfg.JSChallengeEnabled {
+					return ActionJSChallenge
+				}
+				if d.cfg.PoWChallengeEnabled {
+					return ActionPoWChallenge
+				}
+				return ActionBlock
+			}
+		}
+	}
+
+	// Layer 3: Connection limit
+	if ok, _ := d.checkConnectionLimit(ip); !ok {
+		return ActionBlock
+	}
+
+	// Layer 3b: Slowloris detection
+	if d.detectSlowLoris(ip) {
+		metrics.Get().IncDDoSCCBlocks()
+		d.logWarn(ip, path, "slowloris", 0)
+		return ActionBlock
+	}
+
+	return d.checkLate(ip, path, userAgent, hasCookie, fp)
+}
+
+// CheckLate runs the remaining DDoS/CC detection layers (4–7) after content
+// matching.  Assumes CheckEarly was already called for this request (stats
+// have been recorded, Layers 0–3 have passed).
+//
+// Layers:
+//  Layer 4: DDoS pattern (GoldenEye, HTTP Flood, SYN flood) → ActionBlock
+//  Layer 5: Per-IP sliding window → triggers challenge system
+//  Layer 6: UA rotation (>=4 UAs) → ActionBlock
+//  Layer 7: Behavior + reputation + path concentration → graduated response
+func (d *Detector) CheckLate(r *http.Request) Action {
+	if !d.enabled {
+		return ActionAllow
+	}
+
+	ip := blacklist.GetClientIP(r.RemoteAddr, r.Header, d.cfg.TrustForwarded)
+	path := d.requestPath(r)
+	userAgent := r.Header.Get("User-Agent")
+	hasCookie := d.hasValidCookie(r)
+	fp := ExtractBehaviorFingerprint(r)
+
+	return d.checkLate(ip, path, userAgent, hasCookie, fp)
+}
+
+// checkLate is the shared implementation for Layers 4–7, used by both
+// Check (full pipeline) and CheckLate (split pipeline).
+func (d *Detector) checkLate(ip, path, userAgent string, hasCookie bool, fp *BehaviorFingerprint) Action {
 	// Layer 4: DDoS pattern detection (extreme per-IP patterns → direct block)
 	if d.detectGoldenEye(ip) {
 		metrics.Get().IncDDoSCCBlocks()
@@ -255,13 +413,17 @@ func (d *Detector) Check(r *http.Request) Action {
 			Weight: 10,
 		})
 
-		// Per-IP sliding window exceeded → challenge (not flat block, unless extreme)
-		fp := ExtractBehaviorFingerprint(r)
 		behaviorScore := fp.Score()
 		if behaviorScore < d.cfg.BehaviorBlockThreshold {
-			suspicion.OnBlock(d.cfg.BlockAcceleration)
-			metrics.Get().IncDDoSCCBlocks()
-			return ActionBlock
+			if d.ipRequestRate(ip) > 50 {
+				suspicion.OnBlock(d.cfg.BlockAcceleration)
+				metrics.Get().IncDDoSCCBlocks()
+				return ActionBlock
+			}
+			if d.cfg.EnvFingerprintEnabled {
+				return ActionEnvFingerprint
+			}
+			return ActionJSChallenge
 		}
 		if d.cfg.EnvFingerprintEnabled {
 			return ActionEnvFingerprint
@@ -281,9 +443,26 @@ func (d *Detector) Check(r *http.Request) Action {
 		return ActionBlock
 	}
 
-	// Layer 7: Behavior fingerprint + IP reputation + path concentration
-	fp := ExtractBehaviorFingerprint(r)
-	behaviorScore := fp.Score()
+	// Layer 7: Behavior fingerprint + IP reputation + path concentration.
+	//
+	// Cookie users have already proven they are real browsers by passing a
+	// challenge. Do NOT re-challenge them for path concentration or behavior
+	// score — these are traffic-pattern signals that affect both attackers
+	// and normal users during a distributed attack. Re-challenging cookie
+	// users here creates an infinite redirect loop: user passes JS challenge,
+	// gets a valid cookie, but path concentration is still detected on the
+	// same URL and triggers another challenge.
+	//
+	// The cookie limiter (Layer 2) remains the mechanism for catching
+	// cookie-bearing abusers who exceed even elevated rate limits.
+	if hasCookie {
+		return ActionAllow
+	}
+
+	// Skip challenge if IP is within grace period after passing a previous challenge.
+	if d.challenges.IsInGracePeriod(ip) {
+		return ActionAllow
+	}
 
 	d.behaviorMu.RLock()
 	if bt, ok := d.behaviorIPs[ip]; ok {
@@ -291,7 +470,7 @@ func (d *Detector) Check(r *http.Request) Action {
 		fp.PathDiversity = calcPathDiversity(bt.paths, path)
 	}
 	d.behaviorMu.RUnlock()
-	behaviorScore = fp.Score()
+	behaviorScore := fp.Score()
 
 	suspicion := d.reputation.GetOrCreate(ip)
 	suspicionScore := suspicion.GetScore()
@@ -303,6 +482,20 @@ func (d *Detector) Check(r *http.Request) Action {
 	}
 
 	if d.detectPathConcentration(path) {
+		// When the waiting room is active, the waiting room provides primary
+		// traffic control for distributed attacks. Normal users (behaviorScore
+		// >= 70) go directly to the waiting room. Risky IPs must first pass
+		// a JS challenge before entering.
+		if atomic.LoadInt32(&d.waitingRoomActive) == 1 {
+			if behaviorScore >= 70 {
+				return ActionAllow
+			}
+			if d.cfg.EnvFingerprintEnabled {
+				return ActionEnvFingerprint
+			}
+			return ActionJSChallenge
+		}
+
 		suspicion.AddEvent(SuspicionEvent{
 			Time:   time.Now(),
 			Type:   "path_concentration",
@@ -311,9 +504,6 @@ func (d *Detector) Check(r *http.Request) Action {
 
 		suspicionScore := suspicion.GetScore()
 
-		// Path concentration is a distributed pattern: many IPs each sending few
-		// requests. Individual IPs must not be blocked for this alone — only IPs
-		// that independently show high-frequency malicious behavior get blocked.
 		if suspicionScore > d.cfg.SuspicionBlockThreshold {
 			metrics.Get().IncDDoSCCBlocks()
 			suspicion.OnBlock(d.cfg.BlockAcceleration)
@@ -322,7 +512,7 @@ func (d *Detector) Check(r *http.Request) Action {
 		}
 
 		// Challenge escalation with global traffic pressure.
-		// Heavier traffic → heavier challenge type.
+		// Heavier traffic -> heavier challenge type.
 		globalRate := d.global.requestRate(defaultStatsWindow)
 
 		if globalRate > d.cfg.GlobalRateDangerThreshold {
@@ -373,6 +563,23 @@ func (d *Detector) Release(ip string) {
 	}
 }
 
+// ipRequestRate returns the current request rate (req/s) for the given IP.
+func (d *Detector) ipRequestRate(ip string) float64 {
+	d.statsLock.Lock()
+	s, ok := d.stats[ip]
+	d.statsLock.Unlock()
+	if !ok {
+		return 0
+	}
+	return s.requestRate(defaultStatsWindow)
+}
+
+// GenerateTestCookie generates a signed challenge cookie for the given IP.
+// Used by tests to simulate a cookie-authenticated user.
+func (d *Detector) GenerateTestCookie(ip string) string {
+	return d.challenges.GenerateChallengeCookie(ip)
+}
+
 // GetSessionCookie returns the verified session ID from the request's __shield_cc cookie.
 // Returns empty string and false if no valid cookie is present.
 func (d *Detector) GetSessionCookie(r *http.Request) (string, bool) {
@@ -387,6 +594,16 @@ func (d *Detector) GetSessionCookie(r *http.Request) (string, bool) {
 // GlobalRequestRate returns the current global request rate in requests per second.
 func (d *Detector) GlobalRequestRate() float64 {
 	return d.global.requestRate(defaultStatsWindow)
+}
+
+// SetWaitingRoomActive tells the detector whether the waiting room is currently
+// handling global flood traffic. When true, global rate challenges are skipped.
+func (d *Detector) SetWaitingRoomActive(active bool) {
+	var v int32
+	if active {
+		v = 1
+	}
+	atomic.StoreInt32(&d.waitingRoomActive, v)
 }
 
 // IsSuspicious returns true if the IP has a non-zero reputation score,
@@ -417,6 +634,13 @@ func (d *Detector) trackBehavior(ip, path string) {
 
 	if len(bt.timestamps) > 64 {
 		bt.timestamps = bt.timestamps[len(bt.timestamps)-64:]
+	}
+	// Cap paths map to prevent a path-scanning IP from inflating memory
+	// within the behavior tracking window.
+	if len(bt.paths) > 128 {
+		newPaths := make(map[string]int)
+		newPaths[path] = bt.paths[path]
+		bt.paths = newPaths
 	}
 	d.behaviorMu.Unlock()
 
@@ -557,6 +781,22 @@ func (d *Detector) cleanupLoop() {
 
 		// Cleanup challenge states
 		d.challenges.Cleanup(windowDur * 2)
+
+		// Cleanup path concentration stats — remove expired entries so stale
+		// data doesn't keep IsPathConcentrationActive() returning true.
+		pathWin := time.Duration(d.cfg.PathTimeWindowSec) * time.Second
+		d.pathMu.Lock()
+		for path, ps := range d.pathStats {
+			if now.Sub(ps.firstSeen) > pathWin {
+				delete(d.pathStats, path)
+			}
+		}
+		d.pathMu.Unlock()
+
+		// Cleanup reputation entries — remove IPs with decayed scores below
+		// threshold that haven't been seen recently, preventing the 10k-cap
+		// map from being permanently occupied by past attackers.
+		d.reputation.CleanupStale(now.Add(-windowDur * 4), 0.5)
 
 		// Cleanup rate violation counters
 		d.rateViolationsMu.Lock()

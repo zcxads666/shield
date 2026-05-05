@@ -62,6 +62,9 @@ func (n *Notifier) Notify(event Event) {
 	}
 
 	if n.webhook != "" && current >= n.threshold {
+		n.mu.Lock()
+		n.count = 0
+		n.mu.Unlock()
 		go n.sendWebhook(event)
 	}
 }
@@ -81,7 +84,7 @@ func (n *Notifier) sendWebhook(event Event) {
 	if err != nil {
 		return
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 }
 
 // NotifyBlock sends a block notification.

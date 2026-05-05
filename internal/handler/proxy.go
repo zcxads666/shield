@@ -132,6 +132,11 @@ func NewProxyServer(cfg *config.Config, log *logger.Logger, bl *blacklist.Manage
 
 // waitingRoomAutoActivate periodically checks global rate and path concentration
 // and toggles the waiting room on/off accordingly.
+// Uses hysteresis: activates when rate exceeds ActiveThreshold or path concentration
+// is detected; deactivates only when rate drops to 70% of threshold AND no path
+// concentration is active. Queue length is NOT a deactivation condition — requiring
+// an empty queue creates a deadlock where new IPs keep joining while active,
+// preventing the queue from ever draining after the attack subsides.
 func (s *ProxyServer) waitingRoomAutoActivate() {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -140,11 +145,14 @@ func (s *ProxyServer) waitingRoomAutoActivate() {
 		rate := s.ddosCC.GlobalRequestRate()
 		pc := s.ddosCC.IsPathConcentrationActive()
 		shouldActivate := rate > s.cfg.WaitingRoom.ActiveThreshold || pc
+		shouldDeactivate := rate <= s.cfg.WaitingRoom.ActiveThreshold*0.7 && !pc
 
 		if shouldActivate && !s.waitingRoom.IsActive() {
 			s.waitingRoom.SetActive(true)
-		} else if !shouldActivate && s.waitingRoom.IsActive() && s.waitingRoom.QueueLength() == 0 {
+			s.ddosCC.SetWaitingRoomActive(true)
+		} else if shouldDeactivate && s.waitingRoom.IsActive() {
 			s.waitingRoom.SetActive(false)
+			s.ddosCC.SetWaitingRoomActive(false)
 		}
 	}
 }
@@ -198,13 +206,19 @@ func (s *ProxyServer) handle(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), time.Duration(s.cfg.Server.QueueTimeoutMs)*time.Millisecond)
 		defer cancel()
 		// High priority for:
-		// 1. IPs not in blacklist
-		// 2. IPs not marked as suspicious by reputation tracker
-		highPriority := (!s.cfg.Blacklist.Enabled || !s.blacklist.IsBlocked(ip)) &&
-			(s.ddosCC == nil || !s.ddosCC.IsSuspicious(ip))
+		// 1. Cookie-authenticated users (have proven legitimacy via challenge)
+		// 2. IPs not in blacklist AND not marked as suspicious
+		hasCookie := s.ddosCC != nil && func() bool {
+			_, ok := s.ddosCC.GetSessionCookie(r)
+			return ok
+		}()
+		highPriority := hasCookie ||
+			((!s.cfg.Blacklist.Enabled || !s.blacklist.IsBlocked(ip)) &&
+				(s.ddosCC == nil || !s.ddosCC.IsSuspicious(ip)))
 		acquiredHigh, err := s.semaphore.AcquireWithPriority(ctx, highPriority)
 		if err != nil {
 			metrics.Get().IncBlockedRequests()
+			w.Header().Set("X-Block-Reason", "server_overloaded")
 			s.logger.Warn("request_queue_timeout", map[string]interface{}{"ip": ip, "path": r.URL.Path, "error": err.Error()})
 			http.Error(w, "503 Service Unavailable", http.StatusServiceUnavailable)
 			return
@@ -221,20 +235,18 @@ func (s *ProxyServer) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Read request body early — before CC — so content detectors can inspect
-	// payloads even when rate limiting triggers. This enables correct attack
-	// type labeling (SQLi / XSS / WebShell) instead of everything being "cc_attack".
-	bodyBytes, _ := io.ReadAll(r.Body)
-	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-	r.ContentLength = int64(len(bodyBytes))
-
-	// 2. Unified DDoS/CC detection (global flood, multi-IP, per-IP rate, challenge-response)
+	// 2. DDoS/CC early check (Layers 0–3): cookie bypass, global rate, token bucket,
+	//    connection limit, slowloris. These low-cost checks use only headers and
+	//    counters — no body inspection. Running them BEFORE io.ReadAll cuts off
+	//    high-frequency attackers before they can force expensive body reads and
+	//    content matching (asymmetric resource-consumption attack).
+	var earlyDDoSCCPassed bool
 	if s.cfg.DDoSCC.Enabled {
+		defer s.ddosCC.Release(ip)
 		if s.ddosCC.HasChallengeParams(r) {
 			action := s.ddosCC.VerifyChallenge(r)
 			switch action {
 			case ddoscc.ActionAllow:
-				// Challenge passed — strip shield params and redirect to clean URL
 				cleanURL := r.URL.Path
 				q := r.URL.Query()
 				q.Del("__shield_verify")
@@ -275,10 +287,10 @@ func (s *ProxyServer) handle(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		} else {
-			action := s.ddosCC.Check(r)
+			action := s.ddosCC.CheckEarly(r)
 			switch action {
 			case ddoscc.ActionAllow:
-				// Continue processing
+				earlyDDoSCCPassed = true
 			case ddoscc.ActionJSChallenge, ddoscc.ActionEnvFingerprint, ddoscc.ActionPoWChallenge:
 				originalURL := r.URL.Path
 				if r.URL.RawQuery != "" {
@@ -287,11 +299,6 @@ func (s *ProxyServer) handle(w http.ResponseWriter, r *http.Request) {
 				s.ddosCC.ServeChallenge(w, r, action, originalURL)
 				return
 			case ddoscc.ActionBlock:
-				// Before blocking, check if body contains attack payloads
-				// so we label the block with the correct attack type.
-				if s.labelAndBlockContentAttack(w, r, ip, bodyBytes) {
-					return
-				}
 				metrics.Get().IncBlockedRequests()
 				w.Header().Set("X-Block-Reason", "ddos/cc:block")
 				s.logger.Warn("request_blocked_ddoscc", map[string]interface{}{"ip": ip, "path": r.URL.Path, "attack_type": "ddos/cc:block"})
@@ -299,60 +306,48 @@ func (s *ProxyServer) handle(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		defer s.ddosCC.Release(ip)
 	}
 
-	// 3. Waiting room check — peak traffic queuing for users cleared by DDoS/CC
-	if s.waitingRoom != nil && s.waitingRoom.IsActive() {
-		hasWRBypass := false
-		if wrCookie, err := r.Cookie("__shield_wr"); err == nil {
-			if _, ok := s.waitingRoom.VerifySessionCookie(wrCookie.Value, ip); ok {
-				hasWRBypass = true
-			}
-		}
-		if !hasWRBypass {
-			sessionID, hasSession := s.ddosCC.GetSessionCookie(r)
-			if !hasSession {
-				tmpCookie := s.waitingRoom.GenerateSessionCookie(ip)
-				sessionID = strings.SplitN(tmpCookie, ".", 2)[0]
-			}
-
-			originalURL := r.URL.Path
-			if r.URL.RawQuery != "" {
-				originalURL += "?" + r.URL.RawQuery
-			}
-
-			pos, err := s.waitingRoom.Join(sessionID, ip, originalURL)
-			if err != nil {
-				s.logger.Warn("waiting_room_full", map[string]interface{}{"ip": ip, "path": r.URL.Path})
-				http.Error(w, "503 Service Unavailable", http.StatusServiceUnavailable)
-				return
-			}
-
-			s.logger.Info("waiting_room_joined", map[string]interface{}{
-				"ip": ip, "position": pos, "session": sessionID,
+	// Read request body so content detectors can inspect payloads.
+	// Use http.MaxBytesReader (not io.LimitReader) to cap memory consumption.
+	// http.MaxBytesReader implements io.ReadCloser and properly propagates
+	// Close() to the underlying http.connReader, avoiding "invalid concurrent
+	// Body.Read call" panics on HTTP connection reuse.
+	maxBodySize := int64(s.cfg.Server.MaxBodySize)
+	if maxBodySize <= 0 {
+		maxBodySize = 10 << 20 // 10 MB default
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		if strings.Contains(err.Error(), "request body too large") {
+			metrics.Get().IncBlockedRequests()
+			w.Header().Set("X-Block-Reason", "body_too_large")
+			s.logger.Warn("request_body_too_large", map[string]interface{}{
+				"ip": ip, "path": r.URL.Path, "size_i64": maxBodySize,
 			})
-
-			s.waitingRoom.ServeWaitingPage(w, r, sessionID, originalURL)
+			http.Error(w, "413 Request Entity Too Large", http.StatusRequestEntityTooLarge)
 			return
 		}
-	}
-
-	// 4. Record request for brute force detection BEFORE the block check
-	if s.cfg.BruteForce.Enabled {
-		s.bruteForce.RecordRequest(ip, r.URL.Path, r.Method, bodyBytes)
-	}
-
-	// 5. Brute force check (after RecordRequest for correct concurrent counting)
-	if s.cfg.BruteForce.Enabled && s.bruteForce.ShouldBlock(ip, r.URL.Path) {
 		metrics.Get().IncBlockedRequests()
-		w.Header().Set("X-Block-Reason", "brute_force")
-		s.logger.Warn("request_blocked_bruteforce", map[string]interface{}{"ip": ip, "path": r.URL.Path, "attack_type": "brute_force"})
-		http.Error(w, "429 Too Many Requests", http.StatusTooManyRequests)
+		http.Error(w, "400 Bad Request", http.StatusBadRequest)
+		return
+	}
+	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	r.ContentLength = int64(len(bodyBytes))
+	r.GetBody = func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewReader(bodyBytes)), nil
+	}
+
+	// 3. Content detectors — inspect body for attack payloads.
+	//    Fixed pattern matching (SQLi / XSS / WebShell) runs after the
+	//    early DDoS/CC check but before the late-stage DDoS/CC layers,
+	//    so signature-based attacks are correctly labeled.
+	if s.labelAndBlockContentAttack(w, r, ip, bodyBytes) {
 		return
 	}
 
-	// 6. Custom rules engine
+	// 4. Custom rules engine
 	if s.rules.Count() > 0 {
 		targets := map[string]string{
 			"url":    r.URL.String(),
@@ -374,12 +369,111 @@ func (s *ProxyServer) handle(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 7. Content detectors — inspect body for attack payloads
-	if s.labelAndBlockContentAttack(w, r, ip, bodyBytes) {
+	// 5. DDoS/CC late check (Layers 4–7): DDoS pattern detection, sliding window,
+	//    UA rotation, behavior + reputation + path concentration. These heavier
+	//    checks run AFTER content matching so signature-based attacks are already
+	//    intercepted and correctly labeled.
+	if s.cfg.DDoSCC.Enabled && earlyDDoSCCPassed {
+		action := s.ddosCC.CheckLate(r)
+		switch action {
+		case ddoscc.ActionAllow:
+			// Continue processing
+		case ddoscc.ActionJSChallenge, ddoscc.ActionEnvFingerprint, ddoscc.ActionPoWChallenge:
+			originalURL := r.URL.Path
+			if r.URL.RawQuery != "" {
+				originalURL += "?" + r.URL.RawQuery
+			}
+			s.ddosCC.ServeChallenge(w, r, action, originalURL)
+			return
+		case ddoscc.ActionBlock:
+			metrics.Get().IncBlockedRequests()
+			w.Header().Set("X-Block-Reason", "ddos/cc:block")
+			s.logger.Warn("request_blocked_ddoscc", map[string]interface{}{"ip": ip, "path": r.URL.Path, "attack_type": "ddos/cc:block"})
+			http.Error(w, "429 Too Many Requests", http.StatusTooManyRequests)
+			return
+		}
+	}
+
+	// 6. Brute force detection — runs BEFORE the waiting room so credential
+	//    stuffing and brute-force attacks on login endpoints are intercepted
+	//    immediately rather than queued behind general peak traffic.
+	if s.cfg.BruteForce.Enabled {
+		s.bruteForce.RecordRequest(ip, r.URL.Path, r.Method, bodyBytes)
+	}
+	if s.cfg.BruteForce.Enabled && s.bruteForce.ShouldBlock(ip, r.URL.Path) {
+		metrics.Get().IncBlockedRequests()
+		w.Header().Set("X-Block-Reason", "brute_force")
+		s.logger.Warn("request_blocked_bruteforce", map[string]interface{}{"ip": ip, "path": r.URL.Path, "attack_type": "brute_force"})
+		http.Error(w, "429 Too Many Requests", http.StatusTooManyRequests)
 		return
 	}
 
-	// Proxy to backend
+	// 7. Waiting room check — peak traffic queuing for users cleared by DDoS/CC
+	//    AND brute force detection.
+	if s.waitingRoom != nil && s.waitingRoom.IsActive() {
+		hasWRBypass := false
+		if wrCookie, err := r.Cookie("__shield_wr"); err == nil {
+			if _, ok := s.waitingRoom.VerifySessionCookie(wrCookie.Value, ip); ok {
+				hasWRBypass = true
+			}
+		}
+		if !hasWRBypass {
+			// Reuse existing waiting room session ID from cookie for persistence
+			// across page refreshes and reconnections.
+			sessionID := ""
+			hasSession := false
+			if wrSidCookie, err := r.Cookie("__shield_wr_sid"); err == nil {
+				sessionID = wrSidCookie.Value
+				hasSession = true
+			}
+			if !hasSession {
+				sessionID, hasSession = s.ddosCC.GetSessionCookie(r)
+			}
+			if !hasSession {
+				tmpCookie := s.waitingRoom.GenerateSessionCookie(ip)
+				sessionID = strings.SplitN(tmpCookie, ".", 2)[0]
+			}
+
+			originalURL := r.URL.Path
+			if r.URL.RawQuery != "" {
+				originalURL += "?" + r.URL.RawQuery
+			}
+
+			pos, err := s.waitingRoom.Join(sessionID, ip, originalURL)
+			if err != nil {
+				w.Header().Set("X-Block-Reason", "waiting_room_full")
+				s.logger.Warn("waiting_room_full", map[string]interface{}{"ip": ip, "path": r.URL.Path})
+				http.Error(w, "503 Service Unavailable", http.StatusServiceUnavailable)
+				return
+			}
+
+			s.logger.Info("waiting_room_joined", map[string]interface{}{
+				"ip": ip, "position": pos, "session": sessionID,
+			})
+
+			// Persist session ID so the user keeps their queue position across
+			// page refreshes and browser reconnections.
+			http.SetCookie(w, &http.Cookie{
+				Name:     "__shield_wr_sid",
+				Value:    sessionID,
+				Path:     "/",
+				HttpOnly: true,
+				MaxAge:   s.cfg.WaitingRoom.QueueTimeoutSec,
+				SameSite: http.SameSiteLaxMode,
+			})
+
+			s.waitingRoom.ServeWaitingPage(w, r, sessionID, originalURL)
+			return
+		}
+	}
+
+	// Proxy to backend.
+	// Reset r.Body before forwarding — content detectors may have consumed
+	// it via ParseForm, leaving the bytes.NewReader at EOF.
+	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	r.GetBody = func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewReader(bodyBytes)), nil
+	}
 	rec := newResponseRecorder(w)
 	s.proxy.ServeHTTP(rec, r)
 
@@ -395,12 +489,6 @@ func (s *ProxyServer) handle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// blockRequest is a helper to block requests with a reason header.
-func (s *ProxyServer) blockRequest(w http.ResponseWriter, reason string, statusCode int) {
-	metrics.Get().IncBlockedRequests()
-	w.Header().Set("X-Block-Reason", reason)
-	http.Error(w, http.StatusText(statusCode), statusCode)
-}
 
 // responseRecorder captures the status code.
 type responseRecorder struct {

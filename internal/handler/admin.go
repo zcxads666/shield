@@ -2,6 +2,8 @@ package handler
 
 import (
 	"encoding/json"
+	"log"
+	"net"
 	"net/http"
 	"time"
 
@@ -38,7 +40,7 @@ func (s *AdminServer) handleStats(w http.ResponseWriter, r *http.Request) {
 	}
 	m := metrics.Get().Snapshot()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"total_requests":     m.TotalRequests,
 		"blocked_requests":   m.BlockedRequests,
 		"allowed_requests":   m.AllowedRequests,
@@ -50,7 +52,9 @@ func (s *AdminServer) handleStats(w http.ResponseWriter, r *http.Request) {
 		"brute_force_blocks": m.BruteForceBlocks,
 		"blacklisted_ips":    m.BlacklistedIPs,
 		"timestamp":          time.Now().Format(time.RFC3339),
-	})
+	}); err != nil {
+		log.Printf("admin stats encode error: %v", err)
+	}
 }
 
 func (s *AdminServer) handleBlacklist(w http.ResponseWriter, r *http.Request) {
@@ -58,7 +62,9 @@ func (s *AdminServer) handleBlacklist(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		list := s.blacklist.List()
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(list)
+		if err := json.NewEncoder(w).Encode(list); err != nil {
+			log.Printf("admin blacklist encode error: %v", err)
+		}
 	case http.MethodPost:
 		var req struct {
 			IP       string `json:"ip"`
@@ -69,9 +75,15 @@ func (s *AdminServer) handleBlacklist(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		if net.ParseIP(req.IP) == nil {
+			http.Error(w, "invalid ip", http.StatusBadRequest)
+			return
+		}
 		s.blacklist.Add(req.IP, req.Reason, time.Duration(req.Duration)*time.Second, req.Duration == 0)
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]string{"status": "added"})
+		if err := json.NewEncoder(w).Encode(map[string]string{"status": "added"}); err != nil {
+			log.Printf("admin blacklist add encode error: %v", err)
+		}
 	case http.MethodDelete:
 		ip := r.URL.Query().Get("ip")
 		if ip == "" {
@@ -80,7 +92,9 @@ func (s *AdminServer) handleBlacklist(w http.ResponseWriter, r *http.Request) {
 		}
 		s.blacklist.Remove(ip)
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"status": "removed"})
+		if err := json.NewEncoder(w).Encode(map[string]string{"status": "removed"}); err != nil {
+			log.Printf("admin blacklist remove encode error: %v", err)
+		}
 	default:
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	}
@@ -88,8 +102,10 @@ func (s *AdminServer) handleBlacklist(w http.ResponseWriter, r *http.Request) {
 
 func (s *AdminServer) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"status":  "ok",
 		"version": version.Version,
-	})
+	}); err != nil {
+		log.Printf("admin health encode error: %v", err)
+	}
 }

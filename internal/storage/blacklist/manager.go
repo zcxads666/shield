@@ -2,8 +2,10 @@ package blacklist
 
 import (
 	"encoding/json"
+	"log"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -30,7 +32,9 @@ func NewManager(path string) *Manager {
 		entries: make(map[string]*Entry),
 		path:    path,
 	}
-	_ = m.Load()
+	if err := m.Load(); err != nil {
+		log.Printf("blacklist load failed: %v", err)
+	}
 	return m
 }
 
@@ -108,7 +112,9 @@ func (m *Manager) Add(ip, reason string, duration time.Duration, permanent bool)
 		ExpiresAt: time.Now().Add(duration),
 		Permanent: permanent,
 	}
-	_ = m.saveUnsafe()
+	if err := m.saveUnsafe(); err != nil {
+		log.Printf("blacklist save failed: %v", err)
+	}
 }
 
 // Remove removes an IP from the blacklist.
@@ -116,7 +122,9 @@ func (m *Manager) Remove(ip string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.entries, ip)
-	_ = m.saveUnsafe()
+	if err := m.saveUnsafe(); err != nil {
+		log.Printf("blacklist save failed: %v", err)
+	}
 }
 
 // IsBlocked checks if an IP is currently blocked.
@@ -162,14 +170,36 @@ func (m *Manager) Cleanup() {
 	}
 }
 
+// StartCleanupLoop runs periodic cleanup and persists changes to disk.
+// Call this once on startup to prevent unbounded growth of expired entries.
+func (m *Manager) StartCleanupLoop() {
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			m.Cleanup()
+			if err := m.Save(); err != nil {
+				log.Printf("blacklist cleanup save failed: %v", err)
+			}
+		}
+	}()
+}
+
 // GetClientIP extracts client IP from request, respecting X-Forwarded-For.
 func GetClientIP(remoteAddr string, headers map[string][]string, trustForwarded bool) string {
 	if trustForwarded {
 		if xff := headers["X-Forwarded-For"]; len(xff) > 0 && xff[0] != "" {
-			return xff[0]
+			ip, _, _ := strings.Cut(xff[0], ",")
+			ip = strings.TrimSpace(ip)
+			if ip != "" {
+				return ip
+			}
 		}
 		if xri := headers["X-Real-Ip"]; len(xri) > 0 && xri[0] != "" {
-			return xri[0]
+			ip := strings.TrimSpace(xri[0])
+			if ip != "" {
+				return ip
+			}
 		}
 	}
 	host, _, err := net.SplitHostPort(remoteAddr)

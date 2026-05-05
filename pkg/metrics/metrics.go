@@ -15,6 +15,7 @@ type Metrics struct {
 	XSSAttempts       uint64
 	WebShellUploads   uint64
 	DDoSCCBlocks     uint64
+	DDoSCCChallenges uint64
 	BruteForceBlocks uint64
 	BlacklistedIPs   uint64
 }
@@ -56,6 +57,9 @@ func (m *Metrics) IncWebShellUploads() { atomic.AddUint64(&m.WebShellUploads, 1)
 // IncDDoSCCBlocks increments unified DDoS/CC block count.
 func (m *Metrics) IncDDoSCCBlocks() { atomic.AddUint64(&m.DDoSCCBlocks, 1) }
 
+// IncDDoSCCChallenges increments unified DDoS/CC challenge count.
+func (m *Metrics) IncDDoSCCChallenges() { atomic.AddUint64(&m.DDoSCCChallenges, 1) }
+
 // IncBruteForceBlocks increments brute force block count.
 func (m *Metrics) IncBruteForceBlocks() { atomic.AddUint64(&m.BruteForceBlocks, 1) }
 
@@ -73,6 +77,7 @@ func (m *Metrics) Snapshot() Metrics {
 		XSSAttempts:       atomic.LoadUint64(&m.XSSAttempts),
 		WebShellUploads:   atomic.LoadUint64(&m.WebShellUploads),
 		DDoSCCBlocks:     atomic.LoadUint64(&m.DDoSCCBlocks),
+			DDoSCCChallenges: atomic.LoadUint64(&m.DDoSCCChallenges),
 		BruteForceBlocks: atomic.LoadUint64(&m.BruteForceBlocks),
 		BlacklistedIPs:    atomic.LoadUint64(&m.BlacklistedIPs),
 	}

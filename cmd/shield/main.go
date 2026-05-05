@@ -60,6 +60,9 @@ func main() {
 }
 
 func runServer(cfg *config.Config, lg *logger.Logger, bl *blacklist.Manager, re *rules.Engine, cfgMgr *config.Manager) {
+	// Start periodic blacklist cleanup to remove expired entries
+	bl.StartCleanupLoop()
+
 	// Hot reload watcher
 	if cfg.Rules.HotReload {
 		go watchReload(cfgMgr, re)
@@ -103,19 +106,29 @@ func watchReload(cfgMgr *config.Manager, re *rules.Engine) {
 	defer ticker.Stop()
 	for range ticker.C {
 		if err := cfgMgr.Load(); err == nil {
-			_ = re.Load()
+			if err := re.Load(); err != nil {
+				log.Printf("hot-reload rules failed: %v", err)
+			}
+		} else {
+			log.Printf("hot-reload config failed: %v", err)
 		}
 	}
 }
 
 func printStats() {
 	m := metrics.Get().Snapshot()
-	data, _ := json.MarshalIndent(m, "", "  ")
+	data, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		log.Fatalf("Failed to marshal stats: %v", err)
+	}
 	fmt.Println(string(data))
 }
 
 func printBlacklist(bl *blacklist.Manager) {
 	list := bl.List()
-	data, _ := json.MarshalIndent(list, "", "  ")
+	data, err := json.MarshalIndent(list, "", "  ")
+	if err != nil {
+		log.Fatalf("Failed to marshal blacklist: %v", err)
+	}
 	fmt.Println(string(data))
 }

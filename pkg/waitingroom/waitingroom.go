@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -217,7 +218,10 @@ func (wr *WaitingRoom) EstimatedWait(position int) time.Duration {
 // GenerateSessionCookie creates a signed session cookie for the waiting room.
 func (wr *WaitingRoom) GenerateSessionCookie(ip string) string {
 	b := make([]byte, 16)
-	crand.Read(b)
+	if _, err := crand.Read(b); err != nil {
+		log.Printf("waitingroom random read failed: %v", err)
+		panic("crypto/rand: insufficient entropy")
+	}
 	sessionID := hex.EncodeToString(b)
 
 	mac := hmac.New(sha256.New, wr.secretKey)
@@ -258,6 +262,10 @@ func (wr *WaitingRoom) Stop() {
 type GetGlobalRateFunc func() float64
 
 // AutoActivate periodically checks the global rate and toggles the waiting room.
+// Uses hysteresis: activates when rate exceeds threshold; deactivates only when
+// rate drops to 70% of threshold. Queue length is NOT a deactivation condition —
+// requiring an empty queue creates a deadlock where new IPs keep joining while
+// active, preventing the queue from ever draining.
 func (wr *WaitingRoom) AutoActivate(rateFn GetGlobalRateFunc) {
 	if !wr.cfg.Enabled {
 		return
@@ -271,7 +279,7 @@ func (wr *WaitingRoom) AutoActivate(rateFn GetGlobalRateFunc) {
 			rate := rateFn()
 			if rate > wr.cfg.ActiveThreshold && !wr.IsActive() {
 				wr.SetActive(true)
-			} else if rate <= wr.cfg.ActiveThreshold*0.7 && wr.IsActive() && wr.QueueLength() == 0 {
+			} else if rate <= wr.cfg.ActiveThreshold*0.7 && wr.IsActive() {
 				wr.SetActive(false)
 			}
 		case <-wr.stopCh:

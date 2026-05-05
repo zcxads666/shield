@@ -32,6 +32,8 @@ type ServerConfig struct {
 	WriteTimeoutMs int    `yaml:"write_timeout_ms"`
 	MaxHeaderBytes int    `yaml:"max_header_bytes"`
 	AdminBindAddr  string `yaml:"admin_bind_addr"`
+	// MaxBodySize limits the request body size in bytes read into memory (0 = default 10MB).
+	MaxBodySize int `yaml:"max_body_size"`
 	// MaxConcurrent limits total concurrent requests (0 = unlimited).
 	MaxConcurrent int `yaml:"max_concurrent"`
 	// QueueTimeoutMs is max time to wait for a slot (0 = no queue).
@@ -247,6 +249,9 @@ func (m *Manager) setDefault(cfg *Config) {
 	}
 	if cfg.Server.AdminBindAddr == "" {
 		cfg.Server.AdminBindAddr = ":9090"
+	}
+	if cfg.Server.MaxBodySize == 0 {
+		cfg.Server.MaxBodySize = 10 << 20 // 10 MB
 	}
 	if cfg.Server.MaxConcurrent == 0 {
 		cfg.Server.MaxConcurrent = 1000

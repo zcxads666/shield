@@ -82,6 +82,24 @@ func (r *IPReputation) evictOne() {
 	}
 }
 
+// CleanupStale removes entries whose lastSeen is before the cutoff time AND
+// whose decayed score is below the given threshold. This prevents the
+// reputation map from being permanently occupied by past attackers after
+// an attack subsides.
+func (r *IPReputation) CleanupStale(cutoff time.Time, minScore float64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for ip, s := range r.entries {
+		s.mu.Lock()
+		score := s.computeDecayedScore()
+		last := s.LastSeen
+		s.mu.Unlock()
+		if last.Before(cutoff) && score < minScore {
+			delete(r.entries, ip)
+		}
+	}
+}
+
 // AddEvent adds a suspicious event and updates the score.
 func (s *IPSuspicion) AddEvent(event SuspicionEvent) {
 	s.mu.Lock()

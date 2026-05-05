@@ -3,6 +3,7 @@ package ddoscc
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
@@ -181,10 +182,10 @@ func TestCheck_GraduatedTokenBucketResponse(t *testing.T) {
 		t.Fatalf("expected ActionPoWChallenge on 2nd violation, got %s", action)
 	}
 
-	// 3rd violation → ActionBlock
+	// 3rd violation → challenge escalation (not block, since rate < 50 req/s)
 	action = d.Check(makeReq())
-	if action != ActionBlock {
-		t.Fatalf("expected ActionBlock on 3rd violation, got %s", action)
+	if action != ActionPoWChallenge {
+		t.Fatalf("expected ActionPoWChallenge on 3rd violation, got %s", action)
 	}
 }
 
@@ -347,8 +348,8 @@ func TestServeChallenge_SetsCookie(t *testing.T) {
 	d.ServeChallenge(w, req, ActionJSChallenge, "/test")
 
 	resp := w.Result()
-	if resp.StatusCode != http.StatusTooManyRequests {
-		t.Fatalf("expected 429, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
 
 	cookies := resp.Cookies()
@@ -433,4 +434,454 @@ func computeJSTestAnswer(secretKey []byte, token, sessionID string) string {
 	mac := hmac.New(sha256.New, secretKey)
 	mac.Write([]byte(token + "|" + sessionID))
 	return hex.EncodeToString(mac.Sum(nil))[:16]
+}
+
+// --- EnvFingerprint verification tests (hash mismatch fix) ---
+
+func TestVerifyEnvFingerprint_CorrectHashMatch(t *testing.T) {
+	d := newTestDetector(DefaultConfig())
+
+	// Build a realistic fingerprint string (what the JS client produces)
+	fpStr := "canvas:12345:abc;webgl_renderer:ANGLE;screen:1920x1080x24;language:en-US;plugins:5"
+	fpB64 := base64.StdEncoding.EncodeToString([]byte(fpStr))
+	token := "deadbeefcafebabedeadbeefcafebabe"
+
+	// Client computes SHA256(token + "|" + base64(fpStr))
+	clientHash := sha256HexStr(token + "|" + fpB64)
+
+	ok := d.challenges.VerifyEnvFingerprint("session1", token, clientHash, fpB64)
+	if !ok {
+		t.Fatal("expected VerifyEnvFingerprint to return true when hash matches base64-encoded fpData")
+	}
+}
+
+func TestVerifyEnvFingerprint_WrongHash(t *testing.T) {
+	d := newTestDetector(DefaultConfig())
+
+	fpStr := "canvas:12345:abc;webgl_renderer:ANGLE;screen:1920x1080x24"
+	fpB64 := base64.StdEncoding.EncodeToString([]byte(fpStr))
+	token := "deadbeefcafebabedeadbeefcafebabe"
+
+	// Use a deliberately wrong hash
+	wrongHash := "0000000000000000000000000000000000000000000000000000000000000000"
+
+	ok := d.challenges.VerifyEnvFingerprint("session1", token, wrongHash, fpB64)
+	if ok {
+		t.Fatal("expected VerifyEnvFingerprint to return false for wrong hash")
+	}
+}
+
+func TestVerifyEnvFingerprint_DecodeError(t *testing.T) {
+	d := newTestDetector(DefaultConfig())
+
+	// Invalid base64 string
+	invalidB64 := "!!!not-valid-base64!!!"
+	hash := sha256HexStr("test_token" + "|" + invalidB64)
+
+	ok := d.challenges.VerifyEnvFingerprint("session1", "test_token", hash, invalidB64)
+	if ok {
+		t.Fatal("expected VerifyEnvFingerprint to return false for invalid base64")
+	}
+}
+
+func TestVerifyEnvFingerprint_RejectsRawFpDataHash(t *testing.T) {
+	// Confirm the OLD buggy behavior is fixed:
+	// The server must NOT accept a hash computed over raw fpStr (decoded).
+	d := newTestDetector(DefaultConfig())
+
+	fpStr := "canvas:abc;screen:1920x1080;language:en"
+	fpB64 := base64.StdEncoding.EncodeToString([]byte(fpStr))
+	token := "deadbeefcafebabedeadbeefcafebabe"
+
+	// Hash computed over RAW fpStr (old buggy server behavior)
+	hashOverRaw := sha256HexStr(token + "|" + fpStr)
+
+	// Pass the base64 string — the hash is over raw, not over base64 → should fail
+	ok := d.challenges.VerifyEnvFingerprint("session1", token, hashOverRaw, fpB64)
+	if ok {
+		t.Fatal("BUG: server accepted hash over raw fpStr when client sends base64 fpData")
+	}
+}
+
+func TestVerifyEnvFingerprint_AutomationIndicatorsRejected(t *testing.T) {
+	d := newTestDetector(DefaultConfig())
+
+	// Fingerprint with webdriver=true (Selenium automation)
+	fpStr := "canvas:abc;screen:1920x1080;webdriver:true;plugins:5;language:en"
+	fpB64 := base64.StdEncoding.EncodeToString([]byte(fpStr))
+	token := "deadbeefcafebabedeadbeefcafebabe"
+	clientHash := sha256HexStr(token + "|" + fpB64)
+
+	ok := d.challenges.VerifyEnvFingerprint("session1", token, clientHash, fpB64)
+	if ok {
+		t.Fatal("expected VerifyEnvFingerprint to reject when webdriver=true")
+	}
+}
+
+func TestVerifyEnvFingerprint_ScoreTooLow(t *testing.T) {
+	d := newTestDetector(DefaultConfig())
+
+	// Minimal fingerprint — not enough scored fields
+	fpStr := "screen:1920x1080x24;plugins:0"
+	fpB64 := base64.StdEncoding.EncodeToString([]byte(fpStr))
+	token := "deadbeefcafebabedeadbeefcafebabe"
+	clientHash := sha256HexStr(token + "|" + fpB64)
+
+	ok := d.challenges.VerifyEnvFingerprint("session1", token, clientHash, fpB64)
+	if ok {
+		t.Fatal("expected VerifyEnvFingerprint to reject when fingerprint score < 2")
+	}
+}
+
+func sha256HexStr(data string) string {
+	h := sha256.Sum256([]byte(data))
+	return hex.EncodeToString(h[:])
+}
+
+// --- Path concentration + waiting room interaction tests (Fix 2) ---
+
+func TestPathConcentration_SkippedWhenWaitingRoomActive(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.PathIPThreshold = 2      // low threshold for testing
+	cfg.PathAvgReqThreshold = 10 // high avg so path concentration fires
+	cfg.SuspicionBlockThreshold = 80
+	cfg.JSChallengeEnabled = true
+	cfg.EnvFingerprintEnabled = true
+	// Disable other layers
+	cfg.RequestsPerSecond = 10000
+	cfg.BurstSize = 10000
+	cfg.GlobalRateDangerThreshold = 100000
+	cfg.GlobalRateDistributedThreshold = 100000
+	cfg.MaxConnectionsPerIP = 10000
+	cfg.MaxRequests = 200000
+	cfg.BurstRequests = 300000
+	d := newTestDetector(cfg)
+
+	// Activate the waiting room
+	d.SetWaitingRoomActive(true)
+
+	// Simulate multiple IPs hitting the same path (path concentration trigger)
+	makeReq := func(ip string) *http.Request {
+		req := httptest.NewRequest("GET", "/api/test", nil)
+		req.RemoteAddr = ip
+		req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64)")
+		req.Header.Set("Accept", "text/html")
+		req.Header.Set("Accept-Language", "en-US")
+		req.Header.Set("Accept-Encoding", "gzip")
+		req.Header.Set("Connection", "keep-alive")
+		return req
+	}
+
+	// Seed path concentration: 3 IPs each request /api/test once
+	d.Check(makeReq("10.0.0.1:12345"))
+	d.Check(makeReq("10.0.0.2:12345"))
+	d.Check(makeReq("10.0.0.3:12345"))
+
+	// Now a normal IP hits the same path — should be allowed through, no suspicion added
+	normalIP := "10.0.0.99:12345"
+	susp := d.reputation.GetOrCreate("10.0.0.99")
+	scoreBefore := susp.GetScore()
+
+	action := d.Check(makeReq(normalIP))
+	if action != ActionAllow {
+		t.Fatalf("expected ActionAllow when waiting room is active, got %s", action)
+	}
+
+	scoreAfter := susp.GetScore()
+	if scoreAfter > scoreBefore {
+		t.Fatalf("expected NO suspicion increase when waiting room active (before=%f, after=%f)", scoreBefore, scoreAfter)
+	}
+}
+
+func TestPathConcentration_NormalBehaviorWhenWaitingRoomInactive(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.PathIPThreshold = 2
+	cfg.PathAvgReqThreshold = 10
+	cfg.SuspicionBlockThreshold = 80
+	cfg.JSChallengeEnabled = true
+	cfg.EnvFingerprintEnabled = true
+	cfg.RequestsPerSecond = 10000
+	cfg.BurstSize = 10000
+	cfg.GlobalRateDangerThreshold = 100000
+	cfg.GlobalRateDistributedThreshold = 100000
+	cfg.MaxConnectionsPerIP = 10000
+	cfg.MaxRequests = 200000
+	cfg.BurstRequests = 300000
+	d := newTestDetector(cfg)
+
+	// Waiting room is NOT active
+	d.SetWaitingRoomActive(false)
+
+	makeReq := func(ip string) *http.Request {
+		req := httptest.NewRequest("GET", "/api/test", nil)
+		req.RemoteAddr = ip
+		req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64)")
+		req.Header.Set("Accept", "text/html")
+		req.Header.Set("Accept-Language", "en-US")
+		req.Header.Set("Accept-Encoding", "gzip")
+		req.Header.Set("Connection", "keep-alive")
+		return req
+	}
+
+	// Seed path concentration
+	d.Check(makeReq("10.0.0.1:12345"))
+	d.Check(makeReq("10.0.0.2:12345"))
+	d.Check(makeReq("10.0.0.3:12345"))
+
+	// Normal IP should now get challenged (not just allowed)
+	normalIP := "10.0.0.99:12345"
+	susp := d.reputation.GetOrCreate("10.0.0.99")
+	scoreBefore := susp.GetScore()
+
+	action := d.Check(makeReq(normalIP))
+	if action == ActionAllow {
+		t.Fatal("expected challenge (not ActionAllow) when waiting room is inactive and path concentration active")
+	}
+
+	scoreAfter := susp.GetScore()
+	if scoreAfter <= scoreBefore {
+		t.Fatal("expected suspicion increase when waiting room inactive")
+	}
+}
+
+func TestPathConcentration_NoSuspicionAccumulationAcrossRequests(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.PathIPThreshold = 2
+	cfg.PathAvgReqThreshold = 10
+	cfg.SuspicionBlockThreshold = 80
+	cfg.RequestsPerSecond = 10000
+	cfg.BurstSize = 10000
+	cfg.GlobalRateDangerThreshold = 100000
+	cfg.GlobalRateDistributedThreshold = 100000
+	cfg.MaxConnectionsPerIP = 10000
+	cfg.MaxRequests = 200000
+	cfg.BurstRequests = 300000
+	d := newTestDetector(cfg)
+
+	// Activate waiting room
+	d.SetWaitingRoomActive(true)
+
+	makeReq := func(ip string) *http.Request {
+		req := httptest.NewRequest("GET", "/api/test", nil)
+		req.RemoteAddr = ip
+		req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64)")
+		req.Header.Set("Accept", "text/html")
+		req.Header.Set("Accept-Language", "en-US")
+		req.Header.Set("Accept-Encoding", "gzip")
+		req.Header.Set("Connection", "keep-alive")
+		return req
+	}
+
+	// Seed path concentration with attack IPs
+	d.Check(makeReq("10.0.0.1:12345"))
+	d.Check(makeReq("10.0.0.2:12345"))
+	d.Check(makeReq("10.0.0.3:12345"))
+
+	// Normal IP sends 10 requests — none should accumulate suspicion
+	susp := d.reputation.GetOrCreate("10.0.0.99")
+	scoreBefore := susp.GetScore()
+
+	for i := 0; i < 10; i++ {
+		action := d.Check(makeReq("10.0.0.99:12345"))
+		if action != ActionAllow {
+			t.Fatalf("request %d: expected ActionAllow when waiting room active, got %s", i, action)
+		}
+	}
+
+	scoreAfter := susp.GetScore()
+	if scoreAfter > scoreBefore {
+		t.Fatalf("suspicion accumulated over 10 requests while waiting room was active: before=%f, after=%f", scoreBefore, scoreAfter)
+	}
+}
+
+// --- Fix 5 tests: Revised request flow ---
+
+// TestCheck_TokenBucketViolCount3_ChallengeNotBlock ensures that violCount >= 3
+// returns a challenge (not a block) when the IP's request rate is below 50 req/s.
+func TestCheck_TokenBucketViolCount3_ChallengeNotBlock(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.RequestsPerSecond = 1
+	cfg.BurstSize = 1
+	cfg.PoWChallengeEnabled = true
+	cfg.EnvFingerprintEnabled = false
+	cfg.GlobalRateDangerThreshold = 10000
+	cfg.GlobalRateDistributedThreshold = 10000
+	cfg.MaxConnectionsPerIP = 10000
+	cfg.MaxRequests = 200000
+	cfg.BurstRequests = 300000
+	cfg.SuspicionBlockThreshold = 10000
+	cfg.SuspicionChallengeThreshold = 10000
+	d := newTestDetector(cfg)
+
+	makeReq := func() *http.Request {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.RemoteAddr = "10.0.0.1:12345"
+		req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36")
+		req.Header.Set("Accept", "text/html,application/xhtml+xml")
+		req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+		req.Header.Set("Accept-Encoding", "gzip, deflate, br")
+		req.Header.Set("Referer", "https://example.com/")
+		req.Header.Set("Connection", "keep-alive")
+		req.Header.Set("Cache-Control", "max-age=0")
+		req.AddCookie(&http.Cookie{Name: "sessionid", Value: "abc123"})
+		return req
+	}
+
+	// Fill token bucket
+	d.Check(makeReq())
+
+	// 1st violation
+	d.Check(makeReq())
+	// 2nd violation
+	d.Check(makeReq())
+
+	// 3rd violation — should be challenge (PoW), NOT block
+	// since the IP rate is low (< 50 req/s in test conditions).
+	action := d.Check(makeReq())
+	if action == ActionBlock {
+		t.Fatal("expected challenge on 3rd violation (rate < 50), got ActionBlock")
+	}
+	if action != ActionPoWChallenge {
+		t.Fatalf("expected ActionPoWChallenge on 3rd violation, got %s", action)
+	}
+}
+
+// TestCheck_SlidingWindowLowBehavior_ChallengeNotBlock ensures that when the
+// per-IP sliding window is exceeded with low behavior score, the response is
+// a challenge (not a 429 block) when the IP rate is below 50 req/s.
+func TestCheck_SlidingWindowLowBehavior_ChallengeNotBlock(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.MaxRequests = 1
+	cfg.BurstRequests = 1
+	cfg.WindowSec = 60
+	cfg.BehaviorBlockThreshold = 80
+	// Suppress Layer 7 interference so we isolate Layer 5 (sliding window).
+	cfg.BehaviorScoreThreshold = 0
+	cfg.EnvFingerprintEnabled = true
+	cfg.GlobalRateDangerThreshold = 10000
+	cfg.GlobalRateDistributedThreshold = 10000
+	cfg.MaxConnectionsPerIP = 10000
+	cfg.RequestsPerSecond = 10000
+	cfg.BurstSize = 10000
+	cfg.SuspicionBlockThreshold = 10000
+	cfg.SuspicionChallengeThreshold = 10000
+	d := newTestDetector(cfg)
+
+	// Sparse headers → behaviorScore ~52 (between 50 and 80).
+	// Has User-Agent + Accept-Encoding + Accept-Language but no cookie/referer.
+	makeBotReq := func() *http.Request {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.RemoteAddr = "10.0.0.5:12345"
+		req.Header.Set("User-Agent", "curl/7.0")
+		req.Header.Set("Accept-Encoding", "gzip")
+		req.Header.Set("Accept-Language", "en")
+		return req
+	}
+
+	// First request is allowed
+	action := d.Check(makeBotReq())
+	if action != ActionAllow {
+		t.Fatalf("expected ActionAllow on 1st request, got %s", action)
+	}
+
+	// Second request exceeds BurstRequests=2 → sliding window triggers
+	action = d.Check(makeBotReq())
+	if action == ActionBlock {
+		t.Fatal("expected challenge for low-behavior sliding window (rate < 50), got ActionBlock")
+	}
+	if action != ActionEnvFingerprint {
+		t.Fatalf("expected ActionEnvFingerprint for low-behavior sliding window, got %s", action)
+	}
+}
+
+// TestCheck_PathConcentration_WaitingRoomActive_NormalUserAllowed ensures that
+// normal users (behaviorScore >= 70) can directly enter the waiting room without
+// being challenged during distributed attacks.
+func TestCheck_PathConcentration_WaitingRoomActive_NormalUserAllowed(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.PathIPThreshold = 2
+	cfg.PathAvgReqThreshold = 10
+	cfg.SuspicionBlockThreshold = 10000
+	cfg.SuspicionChallengeThreshold = 10000
+	cfg.RequestsPerSecond = 10000
+	cfg.BurstSize = 10000
+	cfg.GlobalRateDangerThreshold = 100000
+	cfg.GlobalRateDistributedThreshold = 100000
+	cfg.MaxConnectionsPerIP = 10000
+	cfg.MaxRequests = 200000
+	cfg.BurstRequests = 300000
+	d := newTestDetector(cfg)
+	d.SetWaitingRoomActive(true)
+
+	// Browser-like request with full headers → behaviorScore >= 70
+	makeBrowserReq := func(ip string) *http.Request {
+		req := httptest.NewRequest("GET", "/api/test", nil)
+		req.RemoteAddr = ip
+		req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+		req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+		req.Header.Set("Accept-Encoding", "gzip, deflate, br")
+		req.Header.Set("Referer", "https://example.com/")
+		req.Header.Set("Connection", "keep-alive")
+		req.Header.Set("Cache-Control", "max-age=0")
+		req.AddCookie(&http.Cookie{Name: "sessionid", Value: "normaluser123"})
+		return req
+	}
+
+	// Seed path concentration with attack IPs
+	d.Check(makeBrowserReq("10.0.0.1:12345"))
+	d.Check(makeBrowserReq("10.0.0.2:12345"))
+	d.Check(makeBrowserReq("10.0.0.3:12345"))
+
+	// Normal user with browser headers should get ActionAllow (direct to waiting room)
+	action := d.Check(makeBrowserReq("10.0.0.99:12345"))
+	if action != ActionAllow {
+		t.Fatalf("normal user with behaviorScore >= 70 should get ActionAllow, got %s", action)
+	}
+}
+
+// TestCheck_PathConcentration_WaitingRoomActive_RiskyIPChallenged ensures that
+// risky IPs (behaviorScore < 70) must pass a JS challenge before entering the
+// waiting room during distributed attacks.
+func TestCheck_PathConcentration_WaitingRoomActive_RiskyIPChallenged(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.PathIPThreshold = 2
+	cfg.PathAvgReqThreshold = 10
+	cfg.SuspicionBlockThreshold = 10000
+	cfg.SuspicionChallengeThreshold = 10000
+	cfg.RequestsPerSecond = 10000
+	cfg.BurstSize = 10000
+	cfg.GlobalRateDangerThreshold = 100000
+	cfg.GlobalRateDistributedThreshold = 100000
+	cfg.MaxConnectionsPerIP = 10000
+	cfg.MaxRequests = 200000
+	cfg.BurstRequests = 300000
+	cfg.EnvFingerprintEnabled = true
+	d := newTestDetector(cfg)
+	d.SetWaitingRoomActive(true)
+
+	// Bot-like request with minimal headers → behaviorScore < 70
+	makeBotReq := func(ip string) *http.Request {
+		req := httptest.NewRequest("GET", "/api/test", nil)
+		req.RemoteAddr = ip
+		// No browser headers → very low behavior score
+		return req
+	}
+
+	// Seed path concentration with attack IPs
+	d.Check(makeBotReq("10.0.0.1:12345"))
+	d.Check(makeBotReq("10.0.0.2:12345"))
+	d.Check(makeBotReq("10.0.0.3:12345"))
+
+	// Risky IP with bot-like headers should get a challenge
+	action := d.Check(makeBotReq("10.0.0.99:12345"))
+	if action == ActionAllow {
+		t.Fatal("risky IP (behaviorScore < 70) should be challenged before waiting room, got ActionAllow")
+	}
+	if action == ActionBlock {
+		t.Fatal("risky IP (behaviorScore < 70) should be challenged, not blocked, got ActionBlock")
+	}
+	if action != ActionEnvFingerprint {
+		t.Fatalf("expected ActionEnvFingerprint for risky IP, got %s", action)
+	}
 }

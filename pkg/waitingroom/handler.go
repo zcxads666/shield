@@ -2,6 +2,7 @@ package waitingroom
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 )
@@ -49,17 +50,23 @@ func (wr *WaitingRoom) SSEHandler() http.HandlerFunc {
 				if pos != lastPosition {
 					lastPosition = pos
 					if pos == 0 {
-						fmt.Fprintf(w, "event: release\ndata: released\n\n")
+						if _, err := fmt.Fprintf(w, "event: release\ndata: released\n\n"); err != nil {
+							return
+						}
 						flusher.Flush()
 						return
 					}
 					estimated := wr.EstimatedWait(pos)
 					qlen := wr.QueueLength()
-					fmt.Fprintf(w, "event: position\ndata: {\"position\":%d,\"estimated\":%d,\"queue_length\":%d}\n\n",
-						pos, int(estimated.Seconds()), qlen)
+					if _, err := fmt.Fprintf(w, "event: position\ndata: {\"position\":%d,\"estimated\":%d,\"queue_length\":%d}\n\n",
+						pos, int(estimated.Seconds()), qlen); err != nil {
+						return
+					}
 					flusher.Flush()
 				} else {
-					fmt.Fprintf(w, ": keepalive\n\n")
+					if _, err := fmt.Fprintf(w, ": keepalive\n\n"); err != nil {
+						return
+					}
 					flusher.Flush()
 				}
 			case <-ctx.Done():
@@ -76,8 +83,10 @@ func (wr *WaitingRoom) StatusHandler() http.HandlerFunc {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		qlen := wr.QueueLength()
 		active := wr.IsActive()
-		fmt.Fprintf(w, `{"active":%v,"queue_length":%d,"release_per_sec":%.1f}`,
-			active, qlen, wr.cfg.ReleasePerSec)
+		if _, err := fmt.Fprintf(w, `{"active":%v,"queue_length":%d,"release_per_sec":%.1f}`,
+			active, qlen, wr.cfg.ReleasePerSec); err != nil {
+			log.Printf("waitingroom status write error: %v", err)
+		}
 	}
 }
 
@@ -160,8 +169,8 @@ function update(p,est,qlen){
 pe.textContent=p>0?p:"排到了!";
 ee.textContent=est;
 qe.textContent=qlen;
-if(maxPos>0&&p>0){
-var pct=Math.round((1-(p-1)/maxPos)*100);
+if(qlen>0&&p>0){
+var pct=Math.round((1-(p-1)/qlen)*100);
 pb.style.width=Math.max(0,Math.min(100,pct))+"%%";
 }
 }

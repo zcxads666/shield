@@ -1,9 +1,9 @@
 package ddoscc
 
 import (
-	"encoding/base64"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/shield/shield/internal/storage/blacklist"
@@ -54,6 +54,41 @@ func (d *Detector) checkGlobalRate(ip string) bool {
 	}
 
 	return true
+}
+
+// checkGlobalRateWithBehavior detects global floods but exempts IPs with high
+// behavior scores (normal browser patterns) even when they lack a cookie.
+// This prevents 86%+ normal IPs from being challenged during distributed attacks.
+func (d *Detector) checkGlobalRateWithBehavior(ip string, fp *BehaviorFingerprint) bool {
+	globalRate := d.global.requestRate(defaultStatsWindow)
+	globalPaths := d.global.uniquePathsInWindow(defaultStatsWindow)
+
+	underAttack := globalRate > d.cfg.GlobalRateDangerThreshold ||
+		(globalRate > d.cfg.GlobalRateDistributedThreshold && globalPaths > d.cfg.GlobalDistributedPathThreshold) ||
+		(globalRate > d.cfg.GlobalRateDistributedThreshold && globalPaths <= d.cfg.GlobalConcentratedPathThreshold)
+
+	if !underAttack {
+		return true
+	}
+
+	// When the waiting room is active, skip global rate challenges — the
+	// waiting room handles traffic control for floods.
+	if atomic.LoadInt32(&d.waitingRoomActive) == 1 {
+		return true
+	}
+
+	behaviorScore := fp.Score()
+
+	// High behavior score (normal browser) — allow through even without cookie.
+	// This preserves access for normal users during distributed DDoS floods.
+	if behaviorScore >= d.cfg.BehaviorScoreThreshold {
+		return true
+	}
+
+	// Low behavior score — challenge.
+	metrics.Get().IncDDoSCCBlocks()
+	d.logWarn(ip, "", "global_flood_challenge", globalRate)
+	return false
 }
 
 // --- Detection Layer 2: Per-IP Token Bucket ---
@@ -321,10 +356,17 @@ func (d *Detector) detectPathConcentration(path string) bool {
 // IsPathConcentrationActive returns true if any path currently has enough unique
 // IPs to qualify as a path concentration attack (used by the waiting room to
 // decide whether to activate during distributed attacks).
+// Expired entries are cleaned up inline to prevent stale data from keeping the
+// waiting room active after an attack subsides.
 func (d *Detector) IsPathConcentrationActive() bool {
-	d.pathMu.RLock()
-	defer d.pathMu.RUnlock()
-	for _, ps := range d.pathStats {
+	d.pathMu.Lock()
+	defer d.pathMu.Unlock()
+	window := time.Duration(d.cfg.PathTimeWindowSec) * time.Second
+	for path, ps := range d.pathStats {
+		if time.Since(ps.firstSeen) > window {
+			delete(d.pathStats, path)
+			continue
+		}
 		if len(ps.ips) >= d.cfg.PathIPThreshold {
 			return true
 		}
@@ -392,10 +434,9 @@ func (d *Detector) ServeChallenge(w http.ResponseWriter, r *http.Request, action
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	metrics.Get().IncDDoSCCBlocks()
-	w.Header().Set("X-Block-Reason", "ddos/cc:challenge")
+	metrics.Get().IncDDoSCCChallenges()
+	w.Header().Set("X-Challenge-Type", action.String())
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusTooManyRequests)
 
 	switch action {
 	case ActionJSChallenge:
@@ -433,13 +474,11 @@ func (d *Detector) VerifyChallenge(r *http.Request) Action {
 		token := q.Get("__shield_token")
 		fpDataB64 := q.Get("__shield_fp")
 		if fpDataB64 != "" {
-			fpDataBytes, err := base64.StdEncoding.DecodeString(fpDataB64)
-			if err == nil {
-				if d.challenges.VerifyEnvFingerprint(sessionID, token, verify, string(fpDataBytes)) {
-					d.challenges.RecordChallengeResult(sessionID, true)
-					suspicion.OnChallengePass()
-					return ActionAllow
-				}
+			if d.challenges.VerifyEnvFingerprint(sessionID, token, verify, fpDataB64) {
+				d.challenges.RecordChallengeResult(sessionID, true)
+				d.challenges.RecordGracePass(ip)
+				suspicion.OnChallengePass()
+				return ActionAllow
 			}
 			d.challenges.RecordChallengeResult(sessionID, false)
 			suspicion.OnChallengeFail()
@@ -448,6 +487,7 @@ func (d *Detector) VerifyChallenge(r *http.Request) Action {
 		// Legacy JS challenge
 		if d.challenges.VerifyJSChallengeAnswer(sessionID, token, verify) {
 			d.challenges.RecordChallengeResult(sessionID, true)
+			d.challenges.RecordGracePass(ip)
 			suspicion.OnChallengePass()
 			return ActionAllow
 		}
@@ -463,6 +503,7 @@ func (d *Detector) VerifyChallenge(r *http.Request) Action {
 		if powToken != "" && powHash != "" {
 			if d.challenges.VerifyPoW(sessionID, powToken, answer, powHash, d.cfg.PoWDifficulty) {
 				d.challenges.RecordChallengeResult(sessionID, true)
+				d.challenges.RecordGracePass(ip)
 				suspicion.OnChallengePass()
 				return ActionAllow
 			}

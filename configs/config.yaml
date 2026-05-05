@@ -108,7 +108,7 @@ rules:
   reload_interval_sec: 3
 
 waiting_room:
-  enabled: false
+  enabled: true
   max_queue_size: 5000
   release_per_sec: 5.0
   session_ttl_sec: 300

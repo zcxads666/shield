@@ -346,15 +346,17 @@ func TestAutoActivate(t *testing.T) {
 		t.Error("expected inactive when rate drops and queue empty")
 	}
 
-	// Low rate but non-empty queue stays active
+	// Low rate deactivates even with non-empty queue.
+	// Requiring an empty queue creates a deadlock where new IPs keep joining
+	// while active, preventing the queue from ever draining after the attack subsides.
 	wr.SetActive(true)
 	wr.Join("s1", "1.2.3.4", "/test")
 	mu.Lock()
 	rateVal = 1.0
 	mu.Unlock()
 	time.Sleep(6 * time.Second)
-	if !wr.IsActive() {
-		t.Error("expected active when queue non-empty")
+	if wr.IsActive() {
+		t.Error("expected inactive when rate drops below threshold (queue non-empty but hysteresis allows deactivation)")
 	}
 }
 
@@ -485,5 +487,71 @@ func TestConcurrentReleaseSignal(t *testing.T) {
 	time.Sleep(2 * time.Second)
 	if wr.QueueLength() != 0 {
 		t.Errorf("expected empty queue after release period, got %d", wr.QueueLength())
+	}
+}
+
+func TestSessionIDPersistenceAcrossReconnects(t *testing.T) {
+	cfg := Config{
+		Enabled:       true,
+		MaxQueueSize:  100,
+		ReleasePerSec: 1.0,
+	}
+	wr := New(cfg, "test-secret")
+	defer wr.Stop()
+
+	pos1, err := wr.Join("persistent-session-abc", "10.0.0.1", "/test")
+	if err != nil {
+		t.Fatalf("initial join: %v", err)
+	}
+	if pos1 != 1 {
+		t.Fatalf("expected position 1, got %d", pos1)
+	}
+
+	// Reconnect with same session ID preserves position
+	pos2, err := wr.Join("persistent-session-abc", "10.0.0.1", "/test")
+	if err != nil {
+		t.Fatalf("reconnect: %v", err)
+	}
+	if pos2 != 1 {
+		t.Fatalf("expected position 1 after reconnect, got %d", pos2)
+	}
+	if wr.QueueLength() != 1 {
+		t.Fatalf("expected queue length 1 after reconnect, got %d", wr.QueueLength())
+	}
+
+	// New session goes to back
+	pos3, err := wr.Join("new-session-xyz", "10.0.0.2", "/test")
+	if err != nil {
+		t.Fatalf("new session: %v", err)
+	}
+	if pos3 != 2 {
+		t.Fatalf("expected position 2, got %d", pos3)
+	}
+}
+
+func TestQueuePositionAccuracy(t *testing.T) {
+	cfg := Config{
+		Enabled:       true,
+		MaxQueueSize:  100,
+		ReleasePerSec: 1.0,
+	}
+	wr := New(cfg, "test-secret")
+	defer wr.Stop()
+
+	wr.Join("s1", "10.0.0.1", "/test")
+	wr.Join("s2", "10.0.0.2", "/test")
+	wr.Join("s3", "10.0.0.3", "/test")
+
+	if wr.QueueLength() != 3 {
+		t.Fatalf("expected queue length 3, got %d", wr.QueueLength())
+	}
+	if wr.Position("s1") != 1 {
+		t.Errorf("s1: expected position 1, got %d", wr.Position("s1"))
+	}
+	if wr.Position("s2") != 2 {
+		t.Errorf("s2: expected position 2, got %d", wr.Position("s2"))
+	}
+	if wr.Position("s3") != 3 {
+		t.Errorf("s3: expected position 3, got %d", wr.Position("s3"))
 	}
 }

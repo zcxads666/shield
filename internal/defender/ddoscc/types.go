@@ -142,4 +142,5 @@ const (
 	slowlorisMinConns              = 3
 	bucketSize                     = 5 * time.Second
 	maxTrackedIPs                  = 10000
+	challengeGracePeriod           = 300 * time.Second // 5 min — IPs that passed a challenge recently are not re-challenged
 )

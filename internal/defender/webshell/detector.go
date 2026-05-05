@@ -1,6 +1,7 @@
 package webshell
 
 import (
+	"io"
 	"net/http"
 	"path/filepath"
 	"regexp"
@@ -31,6 +32,7 @@ var dangerousExts = map[string]bool{
 	".py": true, ".pyc": true, ".pyo": true,
 	".pl": true, ".cgi": true, ".cmd": true, ".bat": true,
 	".war": true, ".ear": true,
+	".shtml": true, ".stm": true, ".shtm": true,
 }
 
 // Double-extension bypass patterns: executable + image/text extension.
@@ -58,6 +60,8 @@ var defaultWebShellPatterns = []string{
 	`(?i)\b(eval|assert|system|exec|shell_exec|passthru)\s*\(\s*(base64_decode|str_rot13|gzinflate|gzuncompress)`,
 	`(?i)file_put_contents\s*\(.*\$_(GET|POST|REQUEST)`,
 	`(?i)fopen\s*\(.*\$_(GET|POST|REQUEST)`,
+	// SSI (Server-Side Include) injection — must precede SQLi/XSS for accurate labeling
+	`(?i)<!--\s*#\s*(exec|include|echo|fsize|flastmod|config|printenv|set)\b`,
 	// Common obfuscation
 	`(?i)\\x65\\x76\\x61\\x6c`, // hex encoded "eval"
 	`(?i)\\x73\\x79\\x73\\x74\\x65\\x6d`, // hex encoded "system"
@@ -114,7 +118,12 @@ func (w *Detector) InspectRequest(r *http.Request) (bool, string) {
 							if f, err := fh.Open(); err == nil {
 								defer f.Close()
 								buf := make([]byte, 4096)
-								n, _ := f.Read(buf)
+								n, err := f.Read(buf)
+								if err != nil && err != io.EOF {
+									w.logger.Warn("webshell_file_read_error", map[string]interface{}{
+										"error": err.Error(),
+									})
+								}
 								if matched2, reason2 := w.checkContent(string(buf[:n])); matched2 {
 									return true, reason2
 								}
@@ -125,7 +134,12 @@ func (w *Detector) InspectRequest(r *http.Request) (bool, string) {
 						if f, err := fh.Open(); err == nil {
 							defer f.Close()
 							buf := make([]byte, 4096)
-							n, _ := f.Read(buf)
+							n, err := f.Read(buf)
+							if err != nil && err != io.EOF {
+								w.logger.Warn("webshell_file_read_error", map[string]interface{}{
+									"error": err.Error(),
+								})
+							}
 							if matched, reason := w.checkContent(string(buf[:n])); matched {
 								return true, reason
 							}
@@ -140,7 +154,12 @@ func (w *Detector) InspectRequest(r *http.Request) (bool, string) {
 	if r.Method == http.MethodPost || r.Method == http.MethodPut {
 		// Try to read body content
 		bodyBytes := make([]byte, 4096)
-		n, _ := r.Body.Read(bodyBytes)
+		n, err := r.Body.Read(bodyBytes)
+		if err != nil && err != io.EOF {
+			w.logger.Warn("webshell_body_read_error", map[string]interface{}{
+				"error": err.Error(),
+			})
+		}
 		if n > 0 {
 			if matched, reason := w.checkContent(string(bodyBytes[:n])); matched {
 				return true, reason
