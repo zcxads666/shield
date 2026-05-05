@@ -14,7 +14,7 @@ func (wr *WaitingRoom) ServeWaitingPage(w http.ResponseWriter, r *http.Request, 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(html))
+	_, _ = w.Write([]byte(html))
 }
 
 // SSEHandler returns a handler that streams position updates via Server-Sent Events.
