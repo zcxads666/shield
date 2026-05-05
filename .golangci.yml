@@ -1,0 +1,34 @@
+run:
+  timeout: 10m
+  skip-dirs:
+    - scripts
+    - testdata
+
+linters-settings:
+  errcheck:
+    check-blank: false
+    exclude-functions:
+      - (hash.Hash).Write
+      - (crypto/rand).Read
+      - (io.Closer).Close
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+        - unused
+        - gosimple
+    - path: cmd/mock_backend/
+      linters:
+        - errcheck
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused

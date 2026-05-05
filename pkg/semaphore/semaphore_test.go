@@ -224,10 +224,7 @@ func TestAcquireWithPriority_NormalFallbackOnFullNormal(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	_, err := ps.AcquireWithPriority(ctx, false)
-	if err == nil {
-		// Could succeed if some releases happened quickly — that's fine
-		// But with timeout it should eventually fail
-	}
+	_ = err
 }
 
 func TestPrioritySemaphoreRelease(t *testing.T) {

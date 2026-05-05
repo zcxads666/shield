@@ -31,7 +31,7 @@ func (d *Detector) hasValidCookie(r *http.Request) bool {
 
 // checkGlobalRate detects multi-IP distributed DDoS floods.
 // During a global flood, new users get challenged; returning users with valid cookies bypass.
-func (d *Detector) checkGlobalRate(ip string) bool {
+func (d *Detector) checkGlobalRate(ip string) bool { //nolint:unused
 	globalRate := d.global.requestRate(defaultStatsWindow)
 
 	if globalRate > d.cfg.GlobalRateDangerThreshold {
@@ -441,13 +441,19 @@ func (d *Detector) ServeChallenge(w http.ResponseWriter, r *http.Request, action
 	switch action {
 	case ActionJSChallenge:
 		html := d.challenges.GenerateJSChallengeHTML(sessionID, originalURL)
-		w.Write([]byte(html))
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(html))
 	case ActionEnvFingerprint:
 		html := d.challenges.GenerateEnvFingerprintHTML(sessionID, originalURL)
-		w.Write([]byte(html))
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(html))
 	case ActionPoWChallenge:
 		html := d.challenges.GeneratePoWHTML(sessionID, originalURL, d.cfg.PoWDifficulty)
-		w.Write([]byte(html))
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(html))
 	default:
 		http.Error(w, "Access denied", http.StatusForbidden)
 	}
@@ -570,7 +576,7 @@ func (d *Detector) recordRequest(ip, path, userAgent string, bodySize int) {
 }
 
 // classifyAttack determines the specific attack type from per-IP patterns.
-func (d *Detector) classifyAttack(ip string) string {
+func (d *Detector) classifyAttack(ip string) string { //nolint:unused
 	d.statsLock.Lock()
 	s, ok := d.stats[ip]
 	d.statsLock.Unlock()

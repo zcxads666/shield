@@ -17,7 +17,6 @@ type ipStats struct {
 	headerFail     int
 	lastSeen       time.Time
 	firstSeen      time.Time
-	connCount      int
 	emptyBodyCount int
 }
 

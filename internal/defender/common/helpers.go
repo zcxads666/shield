@@ -30,9 +30,7 @@ func CollectHeaders(r *http.Request) []string {
 	}
 	// Also scan all header values for comprehensive detection
 	for _, vv := range r.Header {
-		for _, v := range vv {
-			vals = append(vals, v)
-		}
+		vals = append(vals, vv...)
 	}
 	return vals
 }

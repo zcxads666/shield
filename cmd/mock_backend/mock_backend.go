@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 )
 
@@ -32,5 +33,5 @@ func main() {
 	})
 
 	fmt.Println("Mock backend listening on :18081")
-	http.ListenAndServe(":18081", nil)
+	log.Fatal(http.ListenAndServe(":18081", nil))
 }
