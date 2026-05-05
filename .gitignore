@@ -9,3 +9,5 @@ scripts/round14_regression
 scripts/round23_regression
 *.pyc
 __pycache__/
+*.test
+

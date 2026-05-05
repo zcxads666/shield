@@ -1,6 +1,154 @@
-# Shield — 轻量级 Web 应用防火墙（WAF）
+<p align="center">
+  <a href="#-shield---web-application-firewall">English</a> |
+  <a href="#shield---%E8%BD%BB%E9%87%8F%E7%BA%A7-web-%E5%BA%94%E7%94%A8%E9%98%B2%E7%81%AB%E5%A2%99">中文</a>
+</p>
 
-Shield 是一个采用 Go 语言编写的高性能轻量级 Web 应用防火墙，提供 DDoS/CC 防护、SQL 注入检测、XSS 过滤、WebShell 上传拦截、暴力破解防护等全方位安全能力。
+---
+
+# Shield — Web Application Firewall
+
+A high-performance, lightweight WAF written in Go. Provides DDoS/CC mitigation, SQL injection detection, XSS filtering, WebShell upload blocking, brute force protection, and more — all in a single static binary with zero framework dependencies.
+
+## Quick Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/zcxads666/shield/main/scripts/install.sh | sudo bash
+```
+
+Install a specific version:
+
+```bash
+sudo bash install.sh --version v1.14.8
+```
+
+After install: proxy on `:8080`, admin API on `:9090`, systemd service auto-started.
+
+## Features
+
+- **DDoS/CC Mitigation** — 8-layer progressive detection: global rate → token bucket → connection/slowloris → DDoS pattern → sliding window → UA rotation → behavior fingerprint + IP reputation + path concentration
+- **4-Level Challenge System** — JS challenge → environment fingerprint → PoW → math captcha
+- **SQL Injection Defense** — 50+ regex patterns, URL encoding / Unicode / comment obfuscation / hex bypass detection
+- **XSS Filtering** — 70+ patterns covering script injection, SSTI, event handlers, DOM-based, prototype pollution
+- **WebShell Upload Blocking** — Detects PHP / JSP / ASP webshells, double-extension bypass, image horses
+- **Brute Force Protection** — Request frequency + backend response dual detection, distributed attack awareness
+- **Waiting Room** — FIFO queue with SSE real-time position updates, auto-activation during peak traffic
+- **IP Blacklist** — Auto/manual blocking, JSON persistence
+- **Rule Engine** — YAML custom rules, hot-reload
+- **Admin API** — Health check, real-time stats, blacklist management
+- **Structured Logging** — JSON format with request tracing
+
+## Request Pipeline
+
+Each request passes through a **10-layer defense pipeline**:
+
+```
+Client Request
+  │
+  ├─ 1. Priority Semaphore ── high-priority slots for verified users
+  ├─ 2. Blacklist Check ────── blocked IPs → 403
+  ├─ 3. DDoS/CC Early ──────── cookie bypass → global rate → token bucket → connection/slowloris
+  │     └─ Challenge → JS / fingerprint / PoW → fail → block
+  ├─ 4. Content Detection ──── WebShell → SQLi → XSS
+  ├─ 5. Custom Rules ───────── YAML regex rules
+  ├─ 6. DDoS/CC Late ───────── DDoS pattern → sliding window → UA rotation → behavior + reputation
+  │     └─ Challenge → JS / fingerprint / PoW → fail → block
+  ├─ 7. Brute Force ────────── frequency + backend response
+  ├─ 8. Waiting Room ───────── peak queuing, SSE updates
+  │
+  ▼
+Backend Proxy → response status → brute force auxiliary detection
+```
+
+**X-Block-Reason**: `blacklist` | `ddos/cc:block` | `ddos/cc:challenge_failed` | `brute_force` | `rule_matched` | `sql_injection` | `xss` | `webshell_upload` | `server_overloaded` | `body_too_large` | `waiting_room_full`
+
+## Build from Source
+
+```bash
+make build
+go run ./cmd/shield -config configs/config.yaml
+```
+
+```bash
+# Tests (CI uses -race)
+go vet ./...
+go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+# Lint
+golangci-lint run --timeout=10m
+```
+
+## Admin API
+
+Default: `:9090`
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health + version |
+| `/stats` | GET | Real-time counters |
+| `/blacklist` | GET | List blocked IPs |
+| `/blacklist` | POST | Add `{"ip":"...","reason":"...","duration_sec":0}` |
+| `/blacklist?ip=1.2.3.4` | DELETE | Remove IP |
+
+## Directory Structure
+
+```
+.
+├── cmd/
+│   ├── shield/         # Main binary
+│   └── mock_backend/   # Test mock backend
+├── internal/
+│   ├── handler/        # Proxy + admin API
+│   ├── defender/       # Attack detectors (ddoscc, sqlinject, xss, webshell, bruteforce)
+│   ├── service/        # Rules engine, alerts
+│   └── storage/        # Blacklist persistence
+├── pkg/                # Shared libraries (config, logger, metrics, ratelimit, semaphore, waitingroom)
+├── configs/            # Configuration files
+├── scripts/            # Install + test scripts
+├── testdata/           # Test datasets + test scripts
+├── deployments/        # Docker, docker-compose, systemd
+└── docs/               # Documentation
+```
+
+## Docker
+
+```bash
+cd deployments/docker-compose
+docker-compose up -d
+```
+
+## Architecture
+
+```
+cmd/shield (App: assembly + lifecycle)
+    │
+    ▼
+internal/handler (HTTP entry + pipeline orchestration)
+    │
+    ├──▶ internal/defender/* (Detection engines)
+    ├──▶ internal/service/*  (Rules / alerts)
+    └──▶ internal/storage/*  (Blacklist persistence)
+```
+
+- Pure `net/http`, zero web frameworks
+- Dependency injection via constructors
+- All I/O uses `context.Context`
+- `sync/atomic` for lock-free metrics
+
+## Requirements
+
+- Linux x86_64 / arm64, macOS (Apple Silicon / Intel)
+- Memory: ≥ 128 MB
+- CPU: ≥ 1 core
+
+## License
+
+MIT
+
+---
+
+# Shield — 轻量级 Web 应用防火墙
+
+基于 Go 语言的高性能轻量级 Web 应用防火墙。单二进制文件，零框架依赖，提供 DDoS/CC 防护、SQL 注入检测、XSS 过滤、WebShell 上传拦截、暴力破解防护等全方位安全能力。
 
 ## 一键安装
 
@@ -11,20 +159,10 @@ curl -fsSL https://raw.githubusercontent.com/zcxads666/shield/main/scripts/insta
 安装指定版本：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/zcxads666/shield/main/scripts/install.sh -o install.sh
 sudo bash install.sh --version v1.14.8
 ```
 
-卸载：
-
-```bash
-sudo bash install.sh uninstall
-```
-
-安装完成后：
-- 代理服务监听 `:8080`（可通过配置修改）
-- 管理 API 监听 `:9090`
-- systemd 服务自动启动
+安装完成后：代理监听 `:8080`，管理 API 监听 `:9090`，systemd 服务自动启动。
 
 ## 功能特性
 
@@ -40,17 +178,6 @@ sudo bash install.sh uninstall
 - **管理 API** — 健康检查、实时统计、黑名单管理
 - **结构化日志** — JSON格式带请求追踪
 
-## 从源码构建
-
-```bash
-make build
-go run ./cmd/shield -config configs/config.yaml
-```
-
-服务启动后：
-- 代理服务监听 `:8081`（通过 `server.bind_addr` 配置）
-- 管理 API 监听 `:9090`（通过 `server.admin_bind_addr` 配置）
-
 ## 请求处理流水线
 
 每个请求经过以下**10层防御流水线**，按序执行：
@@ -58,134 +185,70 @@ go run ./cmd/shield -config configs/config.yaml
 ```
 客户端请求
   │
-  ├─ 0. 信号量限流 ───────── 优先级信号量，高优先级预留给已验证用户和非可疑IP
-  ├─ 1. 黑名单检查 ───────── 已拉黑IP直接返回403
-  ├─ 2. DDoS/CC前期检测 ──── 轻量检查（Cookie旁路 → 全局速率 → 令牌桶 → 连接数/Slowloris）
-  │     └─ 触发挑战 → JS/环境指纹/PoW → 挑战失败直接拦截
-  ├─ 3. 内容检测 ─────────── WebShell(上传文件时优先) → SQL注入 → XSS（正则匹配）
-  ├─ 4. 规则引擎 ─────────── 自定义YAML规则匹配
-  ├─ 5. DDoS/CC后期检测 ──── 重量检查（DDoS模式 → 滑动窗口 → UA轮换 → 行为+信誉+路径集中度）
-  │     └─ 触发挑战 → JS/环境指纹/PoW → 挑战失败直接拦截
-  ├─ 6. 暴力破解 ─────────── 请求频次+后端响应失败双重检测
-  ├─ 7. 等待室检查 ───────── 峰值排队，SSE实时位置推送
+  ├─ 1. 优先级信号量 ──── 高优先级预留给已验证用户
+  ├─ 2. 黑名单检查 ────── 已拉黑IP直接返回403
+  ├─ 3. DDoS/CC前期检测 ── Cookie旁路 → 全局速率 → 令牌桶 → 连接数/Slowloris
+  │     └─ 触发挑战 → JS/环境指纹/PoW → 失败直接拦截
+  ├─ 4. 内容检测 ──────── WebShell → SQL注入 → XSS
+  ├─ 5. 规则引擎 ──────── 自定义YAML规则匹配
+  ├─ 6. DDoS/CC后期检测 ── DDoS模式 → 滑动窗口 → UA轮换 → 行为+信誉+路径集中度
+  │     └─ 触发挑战 → JS/环境指纹/PoW → 失败直接拦截
+  ├─ 7. 暴力破解 ──────── 请求频次+后端响应失败双重检测
+  ├─ 8. 等待室检查 ────── 峰值排队，SSE实时位置推送
   │
   ▼
 后端代理 → 记录响应状态 → 暴力破解辅助检测
 ```
 
-**X-Block-Reason 响应头**：`blacklist` | `ddos/cc:block` | `ddos/cc:challenge_failed` | `brute_force` | `rule_matched` | `sql_injection` | `xss` | `webshell_upload`
+**X-Block-Reason 响应头**：`blacklist` | `ddos/cc:block` | `ddos/cc:challenge_failed` | `brute_force` | `rule_matched` | `sql_injection` | `xss` | `webshell_upload` | `server_overloaded` | `body_too_large` | `waiting_room_full`
 
-## 目录结构
-
-```
-.
-├── cmd/
-│   ├── shield/                    # 主程序入口
-│   ├── mock_backend/              # 测试用模拟后端
-│   ├── test_100ips/               # 100 IP并发测试工具
-│   ├── test_diagnostic/           # 诊断测试工具
-│   ├── test_final/                # 综合测试工具
-│   └── test_multipath/            # 多路径测试工具
-├── internal/
-│   ├── handler/                   # HTTP 请求处理
-│   │   ├── proxy.go               # 代理服务 + 10层防御流水线编排
-│   │   └── admin.go               # 管理 API
-│   ├── defender/                  # 攻击检测引擎
-│   │   ├── ddoscc/                # 统一 DDoS/CC 防护（8层检测+挑战系统）
-│   │   ├── bruteforce/            # 暴力破解防护
-│   │   ├── sqlinject/             # SQL 注入检测（50+模式）
-│   │   ├── xss/                   # XSS 攻击检测（70+模式）
-│   │   ├── webshell/              # WebShell 上传检测
-│   │   └── common/                # 共享解码/归一化工具
-│   ├── service/                   # 业务服务
-│   │   ├── rules/                 # 规则引擎（YAML+正则+热加载）
-│   │   ├── ipreputation/          # 轻量IP频率追踪
-│   │   └── alert/                 # 告警通知
-│   └── storage/
-│       └── blacklist/             # 黑名单持久化管理
-├── pkg/                           # 可复用公共库
-│   ├── config/                    # YAML配置管理（热加载）
-│   ├── logger/                    # 结构化日志
-│   ├── metrics/                   # 原子计数器
-│   ├── ratelimit/                 # 令牌桶+自适应限流
-│   ├── semaphore/                 # 优先级信号量（并发控制）
-│   ├── waitingroom/               # 等待室（FIFO队列+SSE推送）
-│   └── version/                   # 版本号
-├── configs/                       # 配置文件
-├── scripts/                       # 安装/测试/回归脚本
-├── testdata/                      # 测试数据集
-├── deployments/                   # 部署配置（Docker/systemd）
-├── docs/                          # 文档
-└── Makefile
-```
-
-## 构建与测试
+## 从源码构建
 
 ```bash
-# 编译
 make build
+go run ./cmd/shield -config configs/config.yaml
+```
 
-# 单元测试（带 race 检测）
+```bash
+# 测试
+go vet ./...
 go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
 # 代码检查
-go vet ./...
 golangci-lint run --timeout=10m
-
-# 运行安全测试脚本
-bash scripts/security_test.sh
-
-# 性能压测
-bash scripts/benchmark.sh
 ```
 
 ## 管理 API
 
-默认监听 `:9090`：
-
 | 接口 | 方法 | 说明 |
 |------|------|------|
 | `GET /health` | HTTP | 健康检查，返回版本号 |
-| `GET /stats` | HTTP | 实时统计（请求数、拦截数、各类型攻击数、活跃连接等）|
+| `GET /stats` | HTTP | 实时统计 |
 | `GET /blacklist` | HTTP | 查看黑名单列表 |
-| `POST /blacklist` | HTTP | 手动添加黑名单 `{"ip":"...", "reason":"...", "duration_sec":0}` |
+| `POST /blacklist` | HTTP | 手动添加黑名单 |
 | `DELETE /blacklist?ip=1.2.3.4` | HTTP | 移除黑名单IP |
-
-示例：
 
 ```bash
 curl http://127.0.0.1:9090/health
 curl http://127.0.0.1:9090/stats
-curl http://127.0.0.1:9090/blacklist
 ```
 
 ## 配置说明
 
-关键配置项（完整配置见 `configs/config.yaml`）：
-
 | 配置段 | 关键字段 | 说明 |
 |--------|----------|------|
-| `server` | `bind_addr`, `max_concurrent`, `queue_timeout_ms` | 代理服务绑定地址、最大并发、队列超时 |
-| `proxy` | `target_url`, `trust_forwarded` | 后端地址、是否信任 X-Forwarded-For |
-| `ddos_cc` | `token_bucket_rate`, `js_challenge_enabled`, `pow_challenge_enabled` 等 | DDoS/CC 检测阈值与挑战开关 |
-| `sql_inject` | `enabled`, `action` | SQL注入检测开关 |
-| `xss` | `enabled`, `action` | XSS检测开关 |
-| `upload` | `enabled`, `action` | WebShell检测开关 |
-| `brute_force` | `max_failures`, `window_sec`, `protected_paths` | 暴力破解阈值与保护路径 |
-| `blacklist` | `enabled`, `persist_path`, `auto_blacklist` | 黑名单持久化 |
-| `rules` | `rules_path`, `hot_reload`, `reload_interval_sec` | 规则引擎 |
-| `waiting_room` | `enabled`, `max_queue_size`, `release_per_sec`, `active_threshold` | 等待室配置 |
-
-## Docker 部署
-
-```bash
-cd deployments/docker-compose
-docker-compose up -d
-```
+| `server` | `bind_addr`, `max_concurrent` | 代理绑定地址、最大并发 |
+| `proxy` | `target_url`, `trust_forwarded` | 后端地址、X-Forwarded-For |
+| `ddos_cc` | `token_bucket_rate`, `pow_challenge_enabled` 等 | DDoS/CC 阈值与挑战开关 |
+| `sql_inject` | `enabled`, `action` | SQL注入检测 |
+| `xss` | `enabled`, `action` | XSS检测 |
+| `upload` | `enabled`, `action` | WebShell检测 |
+| `brute_force` | `max_failures`, `window_sec` | 暴力破解阈值 |
+| `blacklist` | `enabled`, `persist_path` | 黑名单持久化 |
+| `rules` | `rules_path`, `hot_reload` | 规则引擎 |
+| `waiting_room` | `enabled`, `max_queue_size` | 等待室配置 |
 
 ## 架构设计
-
-Shield 采用**分层架构**，各层通过构造函数注入依赖：
 
 ```
 cmd/shield (App层: 组装+生命周期)
@@ -193,24 +256,15 @@ cmd/shield (App层: 组装+生命周期)
     ▼
 internal/handler (Handler层: HTTP入口+流水线编排)
     │
-    ├──▶ internal/defender/* (Engine层: 攻击检测引擎)
-    ├──▶ internal/service/*  (Service层: 规则/信誉/告警)
-    └──▶ internal/storage/*  (Repository层: 黑名单持久化)
+    ├──▶ internal/defender/* (引擎层: 攻击检测)
+    ├──▶ internal/service/*  (服务层: 规则/告警)
+    └──▶ internal/storage/*  (仓储层: 黑名单持久化)
 ```
 
-**设计原则**：
+- 纯 `net/http`，零 Web 框架
 - 依赖注入，禁止全局变量（metrics 除外）
-- 检测结果通过返回值传递，不抛 panic
-- 所有 I/O 操作尽可能非阻塞
-- 关键路径配套单元测试
-
-## 安全部署建议
-
-- **HTTPS/TLS**: 建议在 Shield 前方部署 TLS 终止代理（如 Nginx、Caddy），确保客户端到 Shield 之间的通信加密
-- **管理 API 访问控制**: 管理 API 端口（默认 :9090）应仅允许内网访问，不要暴露在公网上
-- **密钥管理**: 配置文件中的 HMAC 密钥（当前硬编码）在生产环境应替换为独立密钥文件或环境变量注入
-- **日志脱敏**: 日志中记录客户端 IP，确保符合数据保护法规要求
-- **Cookie Secure 标志**: 若部署在 HTTPS 环境，建议配置 Cookie 的 Secure 标志以防止中间人攻击
+- 所有 I/O 使用 `context.Context`
+- `sync/atomic` 无锁计数器
 
 ## 系统要求
 
