@@ -180,7 +180,7 @@ func cmdRestart(cfgPath string) {
 		lg.Error("restart_failed", map[string]interface{}{"error": err.Error()})
 		os.Exit(1)
 	}
-	proc.Release()
+	_ = proc.Release()
 	fmt.Printf("Server restarted (PID %d)\n", proc.Pid)
 }
 
@@ -233,7 +233,7 @@ func cmdLogs(cfgPath string, args []string) {
 	lines := 50
 	flags := flag.NewFlagSet("logs", flag.ContinueOnError)
 	flags.IntVar(&lines, "lines", 50, "number of lines to show")
-	flags.Parse(args)
+	_ = flags.Parse(args)
 
 	cfgMgr := config.NewManager(cfgPath)
 	if err := cfgMgr.Load(); err != nil {
@@ -313,7 +313,7 @@ func cmdBlacklist(cfgPath string, args []string) {
 			os.Exit(1)
 		}
 		bl.Add(*ip, *reason, time.Duration(*duration)*time.Second, *duration == 0)
-		bl.Save()
+		_ = bl.Save()
 		fmt.Printf("IP %s added to blacklist\n", *ip)
 
 	case "remove":
@@ -327,7 +327,7 @@ func cmdBlacklist(cfgPath string, args []string) {
 			os.Exit(1)
 		}
 		bl.Remove(*ip)
-		bl.Save()
+		_ = bl.Save()
 		fmt.Printf("IP %s removed from blacklist\n", *ip)
 
 	default:
@@ -549,15 +549,6 @@ func readPidFile(path string) (int, error) {
 		return 0, err
 	}
 	return strconv.Atoi(strings.TrimSpace(string(data)))
-}
-
-func isProcessRunning(pid int) bool {
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	_ = proc
-	return true
 }
 
 func isServerReachable(addr string) bool {
