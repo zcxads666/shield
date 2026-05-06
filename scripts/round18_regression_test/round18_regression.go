@@ -17,7 +17,7 @@ import (
 
 const (
 	shieldURL  = "http://127.0.0.1:8081"
-	adminURL   = "http://127.0.0.1:9090"
+	statusFile = "./data/status.json"
 	timeout    = 10 * time.Second
 	reportFile = "/root/shield/scripts/test_results/round18_regression_report.json"
 )
@@ -193,15 +193,27 @@ func main() {
 }
 
 func getAdminStats() map[string]interface{} {
-	resp, err := httpClient.Get(adminURL + "/stats")
+	data, err := os.ReadFile(statusFile)
 	if err != nil {
-		fmt.Printf("  ⚠️ Failed to get admin stats: %v\n", err)
+		fmt.Printf("  Failed to read status file: %v\n", err)
 		return map[string]interface{}{}
 	}
-	defer resp.Body.Close()
-	var stats map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&stats)
-	return stats
+	var status map[string]interface{}
+	json.Unmarshal(data, &status)
+	metrics, ok := status["metrics"].(map[string]interface{})
+	if !ok {
+		return map[string]interface{}{}
+	}
+	// Remap camelCase keys to snake_case for backward compatibility
+	return map[string]interface{}{
+		"blocked_requests":   metrics["BlockedRequests"],
+		"allowed_requests":   metrics["AllowedRequests"],
+		"total_requests":     metrics["TotalRequests"],
+		"active_connections": metrics["ActiveConnections"],
+		"sql_injections":     metrics["SQLInjections"],
+		"ddos_cc_blocks":     metrics["DDoSCCBlocks"],
+		"brute_force_blocks": metrics["BruteForceBlocks"],
+	}
 }
 
 func doRequestWithIP(ip, method, path string, headers map[string]string, body []byte) (int, string, []byte) {

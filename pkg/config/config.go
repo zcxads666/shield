@@ -10,19 +10,20 @@ import (
 
 // Config represents the entire shield configuration.
 type Config struct {
-	Server      ServerConfig      `yaml:"server"`
-	Proxy       ProxyConfig       `yaml:"proxy"`
-	RateLimit   RateLimitConfig   `yaml:"rate_limit"`
-	DDoSCC      DDoSCCConfig      `yaml:"ddos_cc"`
-	SQLInject   SQLInjectConfig   `yaml:"sql_inject"`
-	XSS         XSSConfig         `yaml:"xss"`
-	BruteForce  BruteForceConfig  `yaml:"brute_force"`
-	Upload      UploadConfig      `yaml:"upload"`
-	Blacklist   BlacklistConfig   `yaml:"blacklist"`
-	Log         LogConfig         `yaml:"log"`
-	Alert       AlertConfig       `yaml:"alert"`
-	Rules       RulesConfig       `yaml:"rules"`
-	WaitingRoom WaitingRoomConfig `yaml:"waiting_room"`
+	Server       ServerConfig       `yaml:"server"`
+	Proxy        ProxyConfig        `yaml:"proxy"`
+	RateLimit    RateLimitConfig    `yaml:"rate_limit"`
+	DDoSCC       DDoSCCConfig       `yaml:"ddos_cc"`
+	SQLInject    SQLInjectConfig    `yaml:"sql_inject"`
+	XSS          XSSConfig          `yaml:"xss"`
+	BruteForce   BruteForceConfig   `yaml:"brute_force"`
+	Upload       UploadConfig       `yaml:"upload"`
+	Blacklist    BlacklistConfig    `yaml:"blacklist"`
+	Log          LogConfig          `yaml:"log"`
+	Alert        AlertConfig        `yaml:"alert"`
+	Rules        RulesConfig        `yaml:"rules"`
+	WaitingRoom  WaitingRoomConfig  `yaml:"waiting_room"`
+	PortMappings []PortMappingItem  `yaml:"port_mappings"`
 }
 
 // ServerConfig defines the shield server settings.
@@ -31,7 +32,6 @@ type ServerConfig struct {
 	ReadTimeoutMs  int    `yaml:"read_timeout_ms"`
 	WriteTimeoutMs int    `yaml:"write_timeout_ms"`
 	MaxHeaderBytes int    `yaml:"max_header_bytes"`
-	AdminBindAddr  string `yaml:"admin_bind_addr"`
 	// MaxBodySize limits the request body size in bytes read into memory (0 = default 10MB).
 	MaxBodySize int `yaml:"max_body_size"`
 	// MaxConcurrent limits total concurrent requests (0 = unlimited).
@@ -40,6 +40,17 @@ type ServerConfig struct {
 	QueueTimeoutMs int `yaml:"queue_timeout_ms"`
 	// HighPriorityRatio is fraction of slots reserved for trusted IPs (0.0~1.0).
 	HighPriorityRatio float64 `yaml:"high_priority_ratio"`
+	// PidFile is the path to write the PID file for process management (default: ./data/shield.pid).
+	PidFile string `yaml:"pid_file"`
+	// StatusFile is the path to write runtime status JSON (default: ./data/status.json).
+	StatusFile string `yaml:"status_file"`
+}
+
+// PortMappingItem defines a standalone port-to-port proxy mapping.
+type PortMappingItem struct {
+	ID     string `yaml:"id" json:"id"`
+	Listen string `yaml:"listen" json:"listen"`
+	Target string `yaml:"target" json:"target"`
 }
 
 // ProxyConfig defines upstream backend settings.
@@ -247,9 +258,6 @@ func (m *Manager) setDefault(cfg *Config) {
 	if cfg.Server.MaxHeaderBytes == 0 {
 		cfg.Server.MaxHeaderBytes = 1 << 20
 	}
-	if cfg.Server.AdminBindAddr == "" {
-		cfg.Server.AdminBindAddr = ":9090"
-	}
 	if cfg.Server.MaxBodySize == 0 {
 		cfg.Server.MaxBodySize = 10 << 20 // 10 MB
 	}
@@ -390,5 +398,11 @@ func (m *Manager) setDefault(cfg *Config) {
 	}
 	if cfg.WaitingRoom.ActiveThreshold == 0 {
 		cfg.WaitingRoom.ActiveThreshold = 40.0
+	}
+	if cfg.Server.PidFile == "" {
+		cfg.Server.PidFile = "./data/shield.pid"
+	}
+	if cfg.Server.StatusFile == "" {
+		cfg.Server.StatusFile = "./data/status.json"
 	}
 }

@@ -128,11 +128,12 @@ server:
   read_timeout_ms: 30000
   write_timeout_ms: 30000
   max_header_bytes: 1048576
-  admin_bind_addr: ":9090"
   max_body_size: 104857600
   max_concurrent: 1000
   queue_timeout_ms: 5000
   high_priority_ratio: 0.2
+  pid_file: "./data/shield.pid"
+  status_file: "./data/status.json"
 
 proxy:
   target_url: "http://127.0.0.1:8082"
@@ -147,20 +148,22 @@ rate_limit:
 
 ddos_cc:
   enabled: true
-  token_bucket_rate: 50
-  token_bucket_burst: 80
-  token_bucket_block_sec: 300
+  requests_per_second: 50
+  burst_size: 80
   max_connections_per_ip: 1000
   slowloris_timeout_ms: 30000
   global_rate_danger_threshold: 5000
-  global_rate_block_threshold: 10000
-  ddos_window_sec: 10
-  ddos_threshold: 200
-  sliding_window_sec: 60
-  sliding_window_threshold: 500
-  ua_rotation_threshold: 50
-  behavior_collect_window_sec: 60
-  behavior_threshold: 30
+  global_rate_distributed_threshold: 22
+  global_distributed_path_threshold: 30
+  global_concentrated_path_threshold: 3
+  max_requests: 500
+  burst_requests: 800
+  window_sec: 60
+  behavior_score_threshold: 70
+  behavior_block_threshold: 30
+  path_ip_threshold: 50
+  path_avg_req_threshold: 3
+  path_time_window_sec: 600
   suspicion_challenge_threshold: 50
   suspicion_block_threshold: 80
   block_duration_sec: 600
@@ -169,9 +172,6 @@ ddos_cc:
   pow_challenge_enabled: true
   pow_difficulty: 3
   env_fingerprint_enabled: true
-  ip_reputation_window_sec: 600
-  path_concentration_threshold: 0.8
-  path_concentration_window_sec: 60
 
 sql_inject:
   enabled: true
@@ -232,6 +232,11 @@ waiting_room:
   session_ttl_sec: 300
   queue_timeout_sec: 300
   active_threshold: 40
+
+# port_mappings:
+#   - id: "example-80"
+#     listen: ":9090"
+#     target: "192.168.1.100:80"
 CONFIGEOF
     chown "$USER_NAME:$USER_NAME" "$SHIELD_DIR/config.yaml" 2>/dev/null || true
 }
@@ -292,7 +297,7 @@ Type=simple
 User=shield
 Group=shield
 WorkingDirectory=/opt/shield
-ExecStart=/opt/shield/bin/shield -config /opt/shield/config.yaml
+ExecStart=/opt/shield/bin/shield -config /opt/shield/config.yaml start
 ExecReload=/bin/kill -HUP \$MAINPID
 Restart=on-failure
 RestartSec=5
@@ -323,15 +328,13 @@ configure_firewall() {
     log_info "配置防火墙..."
     if command -v ufw &>/dev/null; then
         ufw allow 8080/tcp 2>/dev/null || true
-        ufw allow 9090/tcp 2>/dev/null || true
         log_info "ufw 规则已添加"
     elif command -v firewall-cmd &>/dev/null; then
         firewall-cmd --permanent --add-port=8080/tcp 2>/dev/null || true
-        firewall-cmd --permanent --add-port=9090/tcp 2>/dev/null || true
         firewall-cmd --reload 2>/dev/null || true
         log_info "firewalld 规则已添加"
     else
-        log_warn "未检测到防火墙，请手动开放 8080/9090 端口"
+        log_warn "未检测到防火墙，请手动开放所需端口"
     fi
 }
 
@@ -382,9 +385,12 @@ print_status() {
         echo ""
     fi
 
-    echo "  Admin API:"
-    echo "    curl http://127.0.0.1:9090/health"
-    echo "    curl http://127.0.0.1:9090/stats"
+    echo "  CLI 管理:"
+    echo "    shield -config /opt/shield/config.yaml status"
+    echo "    shield -config /opt/shield/config.yaml stats"
+    echo "    shield -config /opt/shield/config.yaml logs --lines 50"
+    echo "    shield -config /opt/shield/config.yaml blacklist list"
+    echo "    shield -config /opt/shield/config.yaml mapping list"
     echo ""
     echo "========================================"
 

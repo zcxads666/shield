@@ -87,8 +87,11 @@ func TestDefaults_All(t *testing.T) {
 	if cfg.Server.MaxHeaderBytes != 1<<20 {
 		t.Errorf("unexpected max header bytes: %d", cfg.Server.MaxHeaderBytes)
 	}
-	if cfg.Server.AdminBindAddr != ":9090" {
-		t.Errorf("unexpected admin bind: %s", cfg.Server.AdminBindAddr)
+	if cfg.Server.PidFile != "./data/shield.pid" {
+		t.Errorf("unexpected pid file: %s", cfg.Server.PidFile)
+	}
+	if cfg.Server.StatusFile != "./data/status.json" {
+		t.Errorf("unexpected status file: %s", cfg.Server.StatusFile)
 	}
 	if cfg.Proxy.TargetURL != "http://127.0.0.1:80" {
 		t.Errorf("unexpected target: %s", cfg.Proxy.TargetURL)

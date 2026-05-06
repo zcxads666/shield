@@ -15,7 +15,7 @@ RESULTS_DIR="$SCRIPT_DIR/test_results"
 SHIELD_BIN="$PROJECT_DIR/bin/shield"
 SHIELD_CONFIG="$PROJECT_DIR/test_config.yaml"
 SHIELD_PORT=18080
-ADMIN_PORT=19090
+STATUS_FILE="$PROJECT_DIR/data/status.json"
 BACKEND_PORT=18081
 
 # Colors
@@ -67,7 +67,6 @@ server:
   read_timeout_ms: 30000
   write_timeout_ms: 30000
   max_header_bytes: 1048576
-  admin_bind_addr: ":19090"
 
 proxy:
   target_url: "http://127.0.0.1:18081"
@@ -181,7 +180,7 @@ EOF
 start_shield() {
     log_step "Starting Shield WAF"
     
-    cd "$PROJECT_DIR" && "$SHIELD_BIN" -config "$SHIELD_CONFIG" &
+    cd "$PROJECT_DIR" && "$SHIELD_BIN" -config "$SHIELD_CONFIG" start &
     SHIELD_PID=$!
     sleep 3
     
@@ -460,30 +459,25 @@ run_blacklist_test() {
 }
 
 #######################################
-# 7. Admin API Test
+# 7. Status File Test
 #######################################
 run_admin_test() {
-    log_step "Admin API Test"
-    local health_code stats_code
-    health_code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$ADMIN_PORT/health" 2>/dev/null || echo "000")
-    stats_code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$ADMIN_PORT/stats" 2>/dev/null || echo "000")
+    log_step "Status File Test"
     
-    log_info "Admin /health: HTTP $health_code"
-    log_info "Admin /stats: HTTP $stats_code"
-    
-    if [[ "$health_code" == "200" ]]; then
-        log_pass "Admin /health OK"
+    if [[ -f "$STATUS_FILE" ]]; then
+        log_pass "Status file exists: $STATUS_FILE"
+        if command -v python3 &>/dev/null; then
+            log_info "$(python3 -m json.tool "$STATUS_FILE" 2>/dev/null | head -20)"
+        elif command -v jq &>/dev/null; then
+            log_info "$(jq '.' "$STATUS_FILE" 2>/dev/null | head -20)"
+        else
+            log_info "$(head -20 "$STATUS_FILE")"
+        fi
     else
-        log_fail "Admin /health failed ($health_code)"
+        log_fail "Status file not found: $STATUS_FILE (is server running?)"
     fi
-    
-    if [[ "$stats_code" == "200" ]]; then
-        log_pass "Admin /stats OK"
-    else
-        log_fail "Admin /stats failed ($stats_code)"
-    fi
-    
-    echo "admin,health=$health_code,stats=$stats_code" > "$RESULTS_DIR/admin.csv"
+
+    echo "admin,health=n/a,stats=n/a" > "$RESULTS_DIR/admin.csv"
 }
 
 #######################################

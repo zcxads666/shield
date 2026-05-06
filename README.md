@@ -35,7 +35,7 @@ curl -fsSL https://raw.githubusercontent.com/zcxads666/shield/main/scripts/insta
 sudo bash install.sh --version v1.14.8
 ```
 
-After install the proxy listens on `:8080` and the admin API on `:9090` with systemd auto-start.
+After install the proxy listens on `:8080`. Manage via CLI commands.
 
 ---
 
@@ -52,7 +52,7 @@ After install the proxy listens on `:8080` and the admin API on `:9090` with sys
 | **Waiting Room** | FIFO queue with SSE real-time position updates; auto-activates under peak load |
 | **IP Blacklist** | Auto/manual blocking with JSON persistence |
 | **Rule Engine** | YAML-defined custom rules with hot-reload |
-| **Admin API** | Health check, real-time metrics, blacklist management |
+| **CLI Management** | Health check, real-time metrics, blacklist, port mapping CRUD |
 | **Logging** | Structured JSON with request tracing |
 
 ---
@@ -89,7 +89,7 @@ Backend Proxy → record response status → brute force auxiliary detection
 
 ```bash
 make build
-go run ./cmd/shield -config configs/config.yaml
+go run ./cmd/shield -config configs/config.yaml start
 ```
 
 ```bash
@@ -100,21 +100,31 @@ golangci-lint run --timeout=10m
 
 ---
 
-## Admin API
-
-Default port: `:9090`
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/health` | Health check and version |
-| `GET` | `/stats` | Real-time counters |
-| `GET` | `/blacklist` | List blocked IPs |
-| `POST` | `/blacklist` | Block an IP `{"ip":"...","reason":"...","duration_sec":0}` |
-| `DELETE` | `/blacklist?ip=1.2.3.4` | Remove an IP |
+## CLI Commands
 
 ```bash
-curl http://127.0.0.1:9090/health
-curl http://127.0.0.1:9090/stats
+# Start the server (validates config first)
+shield --config configs/config.yaml start
+
+# View server status
+shield --config configs/config.yaml status
+
+# View real-time metrics
+shield --config configs/config.yaml stats
+
+# View recent logs
+shield --config configs/config.yaml logs --lines 50
+
+# Blacklist management
+shield --config configs/config.yaml blacklist list
+shield --config configs/config.yaml blacklist add --ip 1.2.3.4 --reason "spam" --duration 3600
+shield --config configs/config.yaml blacklist remove --ip 1.2.3.4
+
+# Port mapping CRUD (independent WAF per port)
+shield --config configs/config.yaml mapping list
+shield --config configs/config.yaml mapping add --id app1 --listen :9090 --target 192.168.1.100:8080
+shield --config configs/config.yaml mapping remove --id app1
+shield --config configs/config.yaml mapping update --id app1 --target 10.0.0.5:3000
 ```
 
 ---
@@ -145,7 +155,8 @@ Full example: `configs/config.yaml`
 ├── cmd/shield/         Main binary
 ├── cmd/mock_backend/   HTTP mock for integration tests
 ├── internal/
-│   ├── handler/        Reverse proxy + admin API
+│   ├── handler/        Reverse proxy
+│   ├── portmap/        Port mapping proxy manager
 │   ├── defender/       Detectors (ddoscc, sqlinject, xss, webshell, bruteforce)
 │   ├── service/        Rules engine, alert notifier
 │   └── storage/        Blacklist JSON persistence
@@ -176,6 +187,7 @@ cmd/shield (assembly + lifecycle)
     ▼
 internal/handler (HTTP entry + pipeline orchestration)
     │
+    ├──▶ internal/portmap (port-level WAF instances)
     ├──▶ internal/defender/* (detection engines)
     ├──▶ internal/service/*  (rules, alerts)
     └──▶ internal/storage/*  (blacklist persistence)

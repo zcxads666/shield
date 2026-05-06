@@ -24,7 +24,7 @@ import (
 
 const (
 	TargetURL   = "http://127.0.0.1:8081"
-	AdminURL    = "http://127.0.0.1:9090/stats"
+	StatusFile  = "./data/status.json"
 	LogFile     = "/opt/shield/logs/shield.log"
 
 	// DDoS configuration
@@ -409,13 +409,11 @@ func runCCAttack() {
 }
 
 func getMetrics() string {
-	resp, err := http.Get(AdminURL)
+	data, err := os.ReadFile(StatusFile)
 	if err != nil {
 		return fmt.Sprintf("error: %v", err)
 	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	return string(body)
+	return string(data)
 }
 
 func getLogStats() (int, map[string]int) {

@@ -6,8 +6,13 @@
 # Build
 go build -o bin/shield ./cmd/shield
 
-# Run (starts proxy on :8080, admin API on :9090)
-go run ./cmd/shield -config configs/config.yaml
+# Run (starts proxy on :8080, validates config first)
+go run ./cmd/shield -config configs/config.yaml start
+
+# CLI commands (stats, blacklist, mapping management)
+go run ./cmd/shield -config configs/config.yaml stats
+go run ./cmd/shield -config configs/config.yaml blacklist list
+go run ./cmd/shield -config configs/config.yaml mapping list
 
 # Test (CI uses -race; run vet before test)
 go vet ./...
@@ -35,7 +40,8 @@ go test -v -race ./internal/defender/sqlinject/...
 |------|---------|
 | `cmd/shield/` | Main binary (`main.go`) |
 | `cmd/mock_backend/` | Mock HTTP backend for integration tests |
-| `internal/handler/` | Core proxy + admin API |
+| `internal/handler/` | Core proxy handler |
+| `internal/portmap/` | Port mapping proxy manager |
 | `internal/defender/` | Attack detectors (sqlinject, xss, webshell, ddoscc, bruteforce) |
 | `internal/service/rules/` | YAML rule engine (hot-reload) |
 | `internal/storage/blacklist/` | IP blacklist (JSON persistence) |

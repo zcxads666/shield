@@ -39,12 +39,12 @@ COPY --from=builder /build/shield /app/shield
 # Copy default config
 COPY --from=builder /build/configs/config.yaml.docker /app/configs/config.yaml
 
-# Expose ports (proxy + admin)
-EXPOSE 8080 9090
+# Expose proxy port
+EXPOSE 8080
 
-# Health check
+# Health check on proxy port
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD wget -qO- http://localhost:9090/health || exit 1
+    CMD wget -qO- http://localhost:8080/ || exit 1
 
 # Run as non-root user
 RUN adduser -D -s /bin/sh shield && \
@@ -52,4 +52,4 @@ RUN adduser -D -s /bin/sh shield && \
 USER shield
 
 ENTRYPOINT ["/app/shield"]
-CMD ["-config", "/app/configs/config.yaml"]
+CMD ["-config", "/app/configs/config.yaml", "start"]

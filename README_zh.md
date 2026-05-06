@@ -35,7 +35,7 @@ curl -fsSL https://raw.githubusercontent.com/zcxads666/shield/main/scripts/insta
 sudo bash install.sh --version v1.14.8
 ```
 
-安装完成后代理监听 `:8080`，管理 API 监听 `:9090`，systemd 服务自动启动。
+安装完成后代理监听 `:8080`。通过 CLI 命令进行管理。
 
 ---
 
@@ -52,7 +52,7 @@ sudo bash install.sh --version v1.14.8
 | **等待室** | FIFO 队列 + SSE 实时位置推送，峰值自动激活 |
 | **IP 黑名单** | 自动/手动拉黑，JSON 持久化 |
 | **规则引擎** | YAML 自定义规则，热加载 |
-| **管理 API** | 健康检查、实时指标、黑名单管理 |
+| **CLI 管理** | 状态检查、实时指标、黑名单、端口映射增删改查 |
 | **日志** | 结构化 JSON，含请求追踪 |
 
 ---
@@ -89,7 +89,7 @@ sudo bash install.sh --version v1.14.8
 
 ```bash
 make build
-go run ./cmd/shield -config configs/config.yaml
+go run ./cmd/shield -config configs/config.yaml start
 ```
 
 ```bash
@@ -100,21 +100,31 @@ golangci-lint run --timeout=10m
 
 ---
 
-## 管理 API
-
-默认端口：`:9090`
-
-| 方法 | 接口 | 说明 |
-|--------|----------|------|
-| `GET` | `/health` | 健康检查与版本号 |
-| `GET` | `/stats` | 实时计数 |
-| `GET` | `/blacklist` | 黑名单列表 |
-| `POST` | `/blacklist` | 拉黑 IP `{"ip":"...","reason":"...","duration_sec":0}` |
-| `DELETE` | `/blacklist?ip=1.2.3.4` | 移除 IP |
+## CLI 命令
 
 ```bash
-curl http://127.0.0.1:9090/health
-curl http://127.0.0.1:9090/stats
+# 启动服务（自动校验配置）
+shield --config configs/config.yaml start
+
+# 查看服务状态
+shield --config configs/config.yaml status
+
+# 查看实时指标
+shield --config configs/config.yaml stats
+
+# 查看最近日志
+shield --config configs/config.yaml logs --lines 50
+
+# 黑名单管理
+shield --config configs/config.yaml blacklist list
+shield --config configs/config.yaml blacklist add --ip 1.2.3.4 --reason "spam" --duration 3600
+shield --config configs/config.yaml blacklist remove --ip 1.2.3.4
+
+# 端口映射 CRUD（独立 WAF 实例）
+shield --config configs/config.yaml mapping list
+shield --config configs/config.yaml mapping add --id app1 --listen :9090 --target 192.168.1.100:8080
+shield --config configs/config.yaml mapping remove --id app1
+shield --config configs/config.yaml mapping update --id app1 --target 10.0.0.5:3000
 ```
 
 ---
@@ -145,7 +155,8 @@ curl http://127.0.0.1:9090/stats
 ├── cmd/shield/         主程序入口
 ├── cmd/mock_backend/   集成测试用模拟后端
 ├── internal/
-│   ├── handler/        反向代理 + 管理 API
+│   ├── handler/        反向代理
+│   ├── portmap/        端口映射代理管理
 │   ├── defender/       检测引擎（ddoscc、sqlinject、xss、webshell、bruteforce）
 │   ├── service/        规则引擎、告警通知
 │   └── storage/        黑名单 JSON 持久化
@@ -176,6 +187,7 @@ cmd/shield（组装 + 生命周期）
     ▼
 internal/handler（HTTP 入口 + 流水线编排）
     │
+    ├──▶ internal/portmap（端口级 WAF 实例）
     ├──▶ internal/defender/*（检测引擎）
     ├──▶ internal/service/* （规则、告警）
     └──▶ internal/storage/* （黑名单持久化）

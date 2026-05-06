@@ -3,7 +3,8 @@ server:
   read_timeout_ms: 30000
   write_timeout_ms: 30000
   max_header_bytes: 1048576
-  admin_bind_addr: ":9090"
+  pid_file: "./data/shield.pid"
+  status_file: "./data/status.json"
   max_concurrent: 1000
   queue_timeout_ms: 5000
   high_priority_ratio: 0.2
@@ -114,3 +115,8 @@ waiting_room:
   session_ttl_sec: 300
   queue_timeout_sec: 300
   active_threshold: 40.0
+
+# port_mappings:
+#   - id: "example-80"
+#     listen: ":9090"
+#     target: "192.168.1.100:80"

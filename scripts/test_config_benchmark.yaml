@@ -3,7 +3,6 @@ server:
   read_timeout_ms: 30000
   write_timeout_ms: 30000
   max_header_bytes: 1048576
-  admin_bind_addr: ":19090"
 
 proxy:
   target_url: "http://127.0.0.1:18081"

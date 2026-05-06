@@ -17,7 +17,6 @@ import (
 
 const (
 	shieldURL  = "http://127.0.0.1:8081"
-	adminURL   = "http://127.0.0.1:9090"
 	timeout    = 15 * time.Second
 	reportFile = "/root/shield/scripts/test_results/round23_regression_report.json"
 )

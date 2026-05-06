@@ -19,9 +19,8 @@ echo "启动 Shield WAF..."
 echo "配置文件: $(pwd)/config.yaml"
 echo "代理目标: $(grep "target_url:" config.yaml | sed 's/.*target_url: //')"
 echo "监听地址: $(grep "bind_addr:" config.yaml | sed 's/.*bind_addr: //')"
-echo "Admin API: $(grep "admin_bind_addr:" config.yaml | sed 's/.*admin_bind_addr: //')"
 echo ""
 echo "按 Ctrl+C 停止"
 echo ""
 
-exec ./bin/shield -config config.yaml
+exec ./bin/shield -config config.yaml start

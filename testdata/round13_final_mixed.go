@@ -24,8 +24,8 @@ import (
 )
 
 const (
-	TargetURL = "http://127.0.0.1:8081"
-	AdminURL  = "http://127.0.0.1:9090/stats"
+	TargetURL  = "http://127.0.0.1:8081"
+	StatusFile = "./data/status.json"
 
 	// DDoS config
 	DDoSDuration    = 35 * time.Second
@@ -148,17 +148,11 @@ func makeClient() *http.Client {
 }
 
 func getMetrics() string {
-	client := &http.Client{
-		Timeout: 5 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
+	data, err := os.ReadFile(StatusFile)
+	if err != nil {
+		return fmt.Sprintf("error: %v", err)
 	}
-	resp, err := client.Get(AdminURL)
-	if err != nil { return fmt.Sprintf("error: %v", err) }
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	return string(body)
+	return string(data)
 }
 
 func doRequest(client *http.Client, path string, ip string, ua string) (int, error) {

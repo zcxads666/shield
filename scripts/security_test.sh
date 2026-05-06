@@ -9,7 +9,7 @@
 set -euo pipefail
 
 SHIELD_URL="${SHIELD_URL:-http://127.0.0.1:8080}"
-ADMIN_URL="${ADMIN_URL:-http://127.0.0.1:9090}"
+STATUS_FILE="${STATUS_FILE:-./data/status.json}"
 DATASET_DIR="${DATASET_DIR:-./scripts/testdata}"
 RESULTS_DIR="${RESULTS_DIR:-./scripts/test_results}"
 
@@ -256,30 +256,27 @@ run_blacklist_test() {
 }
 
 #######################################
-# 6. Admin API Test
+# 6. Status Test (via status file)
 #######################################
 run_admin_test() {
-    log_info "========== Admin API Test =========="
-    local health_code stats_code
-    health_code=$(curl -s -o /dev/null -w "%{http_code}" "$ADMIN_URL/health" 2>/dev/null || echo "000")
-    stats_code=$(curl -s -o /dev/null -w "%{http_code}" "$ADMIN_URL/stats" 2>/dev/null || echo "000")
-
-    log_info "Admin /health: HTTP $health_code"
-    log_info "Admin /stats: HTTP $stats_code"
-
-    if [[ "$health_code" == "200" ]]; then
-        log_pass "Admin /health OK"
+    log_info "========== Status Test =========="
+    if [[ -f "$STATUS_FILE" ]]; then
+        local stat_code="200"
+        log_pass "Status file found: $STATUS_FILE"
+        log_info "Status content:"
+        if command -v python3 &>/dev/null; then
+            python3 -m json.tool "$STATUS_FILE" 2>/dev/null | head -30
+        elif command -v jq &>/dev/null; then
+            jq '.' "$STATUS_FILE" 2>/dev/null | head -30
+        else
+            head -30 "$STATUS_FILE"
+        fi
     else
-        log_fail "Admin /health failed ($health_code)"
+        local stat_code="404"
+        log_fail "Status file not found: $STATUS_FILE (is server running?)"
     fi
 
-    if [[ "$stats_code" == "200" ]]; then
-        log_pass "Admin /stats OK"
-    else
-        log_fail "Admin /stats failed ($stats_code)"
-    fi
-
-    echo "admin,health=$health_code,stats=$stats_code" > "$RESULTS_DIR/admin.csv"
+    echo "admin,health=$stat_code,stats=$stat_code" > "$RESULTS_DIR/admin.csv"
 }
 
 #######################################
@@ -307,7 +304,7 @@ run_normal_test() {
 main() {
     log_info "Shield Security Standardized Test"
     log_info "Shield URL: $SHIELD_URL"
-    log_info "Admin URL:  $ADMIN_URL"
+    log_info "Status File: $STATUS_FILE"
     log_info "Dataset:    $DATASET_DIR"
     log_info "Results:    $RESULTS_DIR"
     echo ""

@@ -9,7 +9,7 @@ test:
 	go test -v ./...
 
 run:
-	go run ./cmd/shield -config configs/config.yaml
+	go run ./cmd/shield -config configs/config.yaml start
 
 clean:
 	rm -rf bin/

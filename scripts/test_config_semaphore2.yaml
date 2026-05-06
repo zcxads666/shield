@@ -3,7 +3,6 @@ server:
   read_timeout_ms: 30000
   write_timeout_ms: 30000
   max_header_bytes: 1048576
-  admin_bind_addr: ":19090"
   max_concurrent: 10
   queue_timeout_ms: 200
   high_priority_ratio: 0.25
