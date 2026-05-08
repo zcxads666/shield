@@ -103,28 +103,31 @@ golangci-lint run --timeout=10m
 ## CLI Commands
 
 ```bash
-# Start the server (validates config first)
-shield --config configs/config.yaml start
+# Start server (validates config first)
+shield
+shield start
 
-# View server status
-shield --config configs/config.yaml status
-
-# View real-time metrics
-shield --config configs/config.yaml stats
+# View status and metrics
+shield status              # or: shield st
+shield stats               # or: shield ss
 
 # View recent logs
-shield --config configs/config.yaml logs --lines 50
+shield logs                # last 50 lines
+shield logs -n 100         # last 100 lines
 
-# Blacklist management
-shield --config configs/config.yaml blacklist list
-shield --config configs/config.yaml blacklist add --ip 1.2.3.4 --reason "spam" --duration 3600
-shield --config configs/config.yaml blacklist remove --ip 1.2.3.4
+# Blacklist (alias: bl)
+shield bl                  # list all
+shield bl add 1.2.3.4              # add (permanent)
+shield bl add 1.2.3.4 spam         # add with reason
+shield bl add 1.2.3.4 spam 3600    # add with 3600s duration
+shield bl rm 1.2.3.4               # remove
 
-# Port mapping CRUD (independent WAF per port)
-shield --config configs/config.yaml mapping list
-shield --config configs/config.yaml mapping add --id app1 --listen :9090 --target 192.168.1.100:8080
-shield --config configs/config.yaml mapping remove --id app1
-shield --config configs/config.yaml mapping update --id app1 --target 10.0.0.5:3000
+# Port mapping (alias: mp) — independent WAF per port
+shield mp                               # list all
+shield mp add :9090 192.168.1.100:8080  # add (auto id)
+shield mp add app1 :9090 192.168.1.100:8080  # add with named id
+shield mp rm app1                        # remove
+shield mp set app1 :9090 10.0.0.5:3000  # update
 ```
 
 ---

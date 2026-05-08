@@ -52,4 +52,4 @@ RUN adduser -D -s /bin/sh shield && \
 USER shield
 
 ENTRYPOINT ["/app/shield"]
-CMD ["-config", "/app/configs/config.yaml", "start"]
+CMD ["-c", "/app/configs/config.yaml", "start"]

@@ -104,27 +104,30 @@ golangci-lint run --timeout=10m
 
 ```bash
 # 启动服务（自动校验配置）
-shield --config configs/config.yaml start
+shield
+shield start
 
-# 查看服务状态
-shield --config configs/config.yaml status
-
-# 查看实时指标
-shield --config configs/config.yaml stats
+# 查看状态与指标
+shield status              # 或 shield st
+shield stats               # 或 shield ss
 
 # 查看最近日志
-shield --config configs/config.yaml logs --lines 50
+shield logs                # 最近 50 行
+shield logs -n 100         # 最近 100 行
 
-# 黑名单管理
-shield --config configs/config.yaml blacklist list
-shield --config configs/config.yaml blacklist add --ip 1.2.3.4 --reason "spam" --duration 3600
-shield --config configs/config.yaml blacklist remove --ip 1.2.3.4
+# 黑名单管理（别名：bl）
+shield bl                  # 列出所有
+shield bl add 1.2.3.4              # 添加（永久）
+shield bl add 1.2.3.4 spam         # 添加并注明原因
+shield bl add 1.2.3.4 spam 3600    # 添加并设置 3600 秒时长
+shield bl rm 1.2.3.4               # 移除
 
-# 端口映射 CRUD（独立 WAF 实例）
-shield --config configs/config.yaml mapping list
-shield --config configs/config.yaml mapping add --id app1 --listen :9090 --target 192.168.1.100:8080
-shield --config configs/config.yaml mapping remove --id app1
-shield --config configs/config.yaml mapping update --id app1 --target 10.0.0.5:3000
+# 端口映射（别名：mp）— 独立的 WAF 实例
+shield mp                               # 列出所有
+shield mp add :9090 192.168.1.100:8080  # 添加（自动生成 id）
+shield mp add app1 :9090 192.168.1.100:8080  # 添加（指定 id）
+shield mp rm app1                        # 移除
+shield mp set app1 :9090 10.0.0.5:3000  # 更新
 ```
 
 ---

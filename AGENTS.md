@@ -7,12 +7,13 @@
 go build -o bin/shield ./cmd/shield
 
 # Run (starts proxy on :8080, validates config first)
-go run ./cmd/shield -config configs/config.yaml start
+go run ./cmd/shield -c configs/config.yaml start
 
-# CLI commands (stats, blacklist, mapping management)
-go run ./cmd/shield -config configs/config.yaml stats
-go run ./cmd/shield -config configs/config.yaml blacklist list
-go run ./cmd/shield -config configs/config.yaml mapping list
+# CLI commands (status, stats, blacklist, mapping management)
+go run ./cmd/shield -c configs/config.yaml status
+go run ./cmd/shield -c configs/config.yaml stats
+go run ./cmd/shield -c configs/config.yaml bl
+go run ./cmd/shield -c configs/config.yaml mp
 
 # Test (CI uses -race; run vet before test)
 go vet ./...

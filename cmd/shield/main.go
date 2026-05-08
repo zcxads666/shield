@@ -26,37 +26,36 @@ import (
 	"github.com/shield/shield/pkg/version"
 )
 
-var usageText = `Usage: shield [--config <path>] <command> [args...]
+var usageText = `Usage: shield [-c <config>] <command> [args]
 
-Commands:
-  start       Start the shield server (validates config first)
-  restart     Stop the running instance and start a new one
-  status      Show whether the server is running
-  stats       Print current metrics and status
-  logs        View recent log output
-  blacklist   Manage IP blacklist (list | add | remove)
-  mapping     Manage port mappings (list | add | remove | update)
+Commands (aliases):
+  (no args)                 Start server with config validation
+  start                     Start server
+  restart                   Restart server
+  status, st                Show server runtime status
+  stats, ss                 Print metrics JSON
+  logs, log [-n N]          Show last N log lines (default: 50)
 
-Blacklist subcommands:
-  shield blacklist list
-  shield blacklist add    --ip <ip> --reason <reason> [--duration <sec>]
-  shield blacklist remove --ip <ip>
+  blacklist, bl             List blacklisted IPs
+  bl add <ip> [reason] [duration_sec]
+                            Add IP (0 duration = permanent)
+  bl rm <ip>                Remove IP from blacklist
 
-Mapping subcommands:
-  shield mapping list
-  shield mapping add    --id <id> --listen <addr> --target <ip:port>
-  shield mapping remove --id <id>
-  shield mapping update --id <id> [--listen <addr>] [--target <ip:port>]
-
-Other commands:
-  shield logs [--lines <n>]
+  mapping, mp               List port mappings
+  mp add <listen> <target>  Add mapping (auto-generates id)
+  mp add <id> <listen> <target>
+                            Add mapping with explicit id
+  mp rm <id>                Remove mapping
+  mp set <id> <listen> <target>
+                            Update mapping
 
 Options:
-  --config <path>   Path to configuration file (default: configs/config.yaml)
+  -c, --config <path>       Config file path (default: configs/config.yaml)
 `
 
 func main() {
-	cfgPath := flag.String("config", "configs/config.yaml", "path to configuration file")
+	cfgPath := flag.String("c", "configs/config.yaml", "path to configuration file")
+	flag.StringVar(cfgPath, "config", "configs/config.yaml", "")
 	flag.Usage = func() { fmt.Print(usageText) }
 	flag.Parse()
 
@@ -66,6 +65,7 @@ func main() {
 		cmd = args[0]
 		args = args[1:]
 	}
+	cmd = resolveAlias(cmd)
 
 	switch cmd {
 	case "start":
@@ -76,11 +76,11 @@ func main() {
 		cmdStatus(*cfgPath)
 	case "stats":
 		cmdStats(*cfgPath)
-	case "logs":
+	case "logs", "log":
 		cmdLogs(*cfgPath, args)
-	case "blacklist":
+	case "blacklist", "bl":
 		cmdBlacklist(*cfgPath, args)
-	case "mapping":
+	case "mapping", "mp":
 		cmdMapping(*cfgPath, args)
 	case "help", "-h", "--help":
 		fmt.Print(usageText)
@@ -89,6 +89,22 @@ func main() {
 		fmt.Print(usageText)
 		os.Exit(1)
 	}
+}
+
+func resolveAlias(cmd string) string {
+	switch strings.ToLower(cmd) {
+	case "st":
+		return "status"
+	case "ss":
+		return "stats"
+	case "log":
+		return "logs"
+	case "bl":
+		return "blacklist"
+	case "mp":
+		return "mapping"
+	}
+	return cmd
 }
 
 // --- start ---
@@ -232,7 +248,7 @@ func cmdStats(cfgPath string) {
 func cmdLogs(cfgPath string, args []string) {
 	lines := 50
 	flags := flag.NewFlagSet("logs", flag.ContinueOnError)
-	flags.IntVar(&lines, "lines", 50, "number of lines to show")
+	flags.IntVar(&lines, "n", 50, "number of lines")
 	_ = flags.Parse(args)
 
 	cfgMgr := config.NewManager(cfgPath)
@@ -273,22 +289,20 @@ func cmdLogs(cfgPath string, args []string) {
 // --- blacklist ---
 
 func cmdBlacklist(cfgPath string, args []string) {
-	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "Usage: shield blacklist <list|add|remove> [args...]")
-		os.Exit(1)
-	}
-
-	sub := args[0]
-	subArgs := args[1:]
-
 	cfgMgr := config.NewManager(cfgPath)
 	if err := cfgMgr.Load(); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
 		os.Exit(1)
 	}
 	cfg := cfgMgr.Get()
-
 	bl := blacklist.NewManager(cfg.Blacklist.PersistPath)
+
+	if len(args) == 0 {
+		args = []string{"list"}
+	}
+
+	sub := args[0]
+	subArgs := args[1:]
 
 	switch sub {
 	case "list":
@@ -301,37 +315,36 @@ func cmdBlacklist(cfgPath string, args []string) {
 		fmt.Println(string(data))
 
 	case "add":
-		flags := flag.NewFlagSet("blacklist add", flag.ContinueOnError)
-		ip := flags.String("ip", "", "IP address to block")
-		reason := flags.String("reason", "", "reason for blocking")
-		duration := flags.Int("duration", 0, "block duration in seconds (0 = permanent)")
-		if err := flags.Parse(subArgs); err != nil {
+		if len(subArgs) < 1 {
+			fmt.Fprintln(os.Stderr, "Usage: shield bl add <ip> [reason] [duration_sec]")
 			os.Exit(1)
 		}
-		if *ip == "" {
-			fmt.Fprintln(os.Stderr, "Error: --ip is required")
-			os.Exit(1)
+		ip := subArgs[0]
+		reason := ""
+		if len(subArgs) > 1 {
+			reason = subArgs[1]
 		}
-		bl.Add(*ip, *reason, time.Duration(*duration)*time.Second, *duration == 0)
+		dur := 0
+		if len(subArgs) > 2 {
+			if d, err := strconv.Atoi(subArgs[2]); err == nil {
+				dur = d
+			}
+		}
+		bl.Add(ip, reason, time.Duration(dur)*time.Second, dur == 0)
 		_ = bl.Save()
-		fmt.Printf("IP %s added to blacklist\n", *ip)
+		fmt.Printf("IP %s added to blacklist\n", ip)
 
-	case "remove":
-		flags := flag.NewFlagSet("blacklist remove", flag.ContinueOnError)
-		ip := flags.String("ip", "", "IP address to unblock")
-		if err := flags.Parse(subArgs); err != nil {
+	case "rm", "remove":
+		if len(subArgs) < 1 {
+			fmt.Fprintln(os.Stderr, "Usage: shield bl rm <ip>")
 			os.Exit(1)
 		}
-		if *ip == "" {
-			fmt.Fprintln(os.Stderr, "Error: --ip is required")
-			os.Exit(1)
-		}
-		bl.Remove(*ip)
+		bl.Remove(subArgs[0])
 		_ = bl.Save()
-		fmt.Printf("IP %s removed from blacklist\n", *ip)
+		fmt.Printf("IP %s removed from blacklist\n", subArgs[0])
 
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown blacklist subcommand: %s\n", sub)
+		fmt.Fprintf(os.Stderr, "Unknown subcommand: %s. Use: list, add, rm\n", sub)
 		os.Exit(1)
 	}
 }
@@ -339,9 +352,8 @@ func cmdBlacklist(cfgPath string, args []string) {
 // --- mapping ---
 
 func cmdMapping(cfgPath string, args []string) {
-	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "Usage: shield mapping <list|add|remove|update> [args...]")
-		os.Exit(1)
+	if len(args) == 0 {
+		args = []string{"list"}
 	}
 
 	sub := args[0]
@@ -369,57 +381,54 @@ func cmdMapping(cfgPath string, args []string) {
 		fmt.Print(string(data))
 
 	case "add":
-		flags := flag.NewFlagSet("mapping add", flag.ContinueOnError)
-		id := flags.String("id", "", "mapping identifier")
-		listen := flags.String("listen", "", "listen address (e.g. :9090)")
-		target := flags.String("target", "", "target ip:port (e.g. 192.168.1.100:8080)")
-		if err := flags.Parse(subArgs); err != nil {
-			os.Exit(1)
-		}
-		if *id == "" || *listen == "" || *target == "" {
-			fmt.Fprintln(os.Stderr, "Error: --id, --listen, and --target are required")
+		var id, listen, target string
+		switch len(subArgs) {
+		case 2:
+			listen, target = subArgs[0], subArgs[1]
+			id = "auto-" + listen
+		case 3:
+			id, listen, target = subArgs[0], subArgs[1], subArgs[2]
+		default:
+			fmt.Fprintln(os.Stderr, "Usage: shield mp add <listen> <target>")
+			fmt.Fprintln(os.Stderr, "  or:  shield mp add <id> <listen> <target>")
 			os.Exit(1)
 		}
 		for _, m := range cfg.PortMappings {
-			if m.ID == *id {
-				fmt.Fprintf(os.Stderr, "Error: mapping with id %q already exists\n", *id)
+			if m.Listen == listen {
+				fmt.Fprintf(os.Stderr, "Error: listen address %q already in use by mapping %q\n", listen, m.ID)
 				os.Exit(1)
 			}
 		}
-		if !isValidIPPort(*target) {
-			fmt.Fprintf(os.Stderr, "Error: invalid target %q (must be ip:port, e.g. 192.168.1.100:8080)\n", *target)
+		if !isValidIPPort(target) {
+			fmt.Fprintf(os.Stderr, "Error: invalid target %q (must be ip:port)\n", target)
 			os.Exit(1)
 		}
 		cfg.PortMappings = append(cfg.PortMappings, config.PortMappingItem{
-			ID: *id, Listen: *listen, Target: *target,
+			ID: id, Listen: listen, Target: target,
 		})
 		if err := writeConfigYAML(cfgPath, &cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to write config: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Printf("Port mapping %q added (restart server to apply)\n", *id)
+		fmt.Printf("Port mapping %q added (%s -> %s, restart to apply)\n", id, listen, target)
 
-	case "remove":
-		flags := flag.NewFlagSet("mapping remove", flag.ContinueOnError)
-		id := flags.String("id", "", "mapping identifier to remove")
-		if err := flags.Parse(subArgs); err != nil {
+	case "rm", "remove":
+		if len(subArgs) < 1 {
+			fmt.Fprintln(os.Stderr, "Usage: shield mp rm <id>")
 			os.Exit(1)
 		}
-		if *id == "" {
-			fmt.Fprintln(os.Stderr, "Error: --id is required")
-			os.Exit(1)
-		}
+		id := subArgs[0]
 		found := false
 		newMappings := make([]config.PortMappingItem, 0, len(cfg.PortMappings))
 		for _, m := range cfg.PortMappings {
-			if m.ID == *id {
+			if m.ID == id {
 				found = true
 				continue
 			}
 			newMappings = append(newMappings, m)
 		}
 		if !found {
-			fmt.Fprintf(os.Stderr, "Error: mapping with id %q not found\n", *id)
+			fmt.Fprintf(os.Stderr, "Error: mapping %q not found\n", id)
 			os.Exit(1)
 		}
 		cfg.PortMappings = newMappings
@@ -427,55 +436,39 @@ func cmdMapping(cfgPath string, args []string) {
 			fmt.Fprintf(os.Stderr, "Failed to write config: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Printf("Port mapping %q removed (restart server to apply)\n", *id)
+		fmt.Printf("Port mapping %q removed (restart to apply)\n", id)
 
-	case "update":
-		flags := flag.NewFlagSet("mapping update", flag.ContinueOnError)
-		id := flags.String("id", "", "mapping identifier to update")
-		listen := flags.String("listen", "", "new listen address")
-		target := flags.String("target", "", "new target ip:port")
-		if err := flags.Parse(subArgs); err != nil {
+	case "set", "update":
+		if len(subArgs) < 3 {
+			fmt.Fprintln(os.Stderr, "Usage: shield mp set <id> <listen> <target>")
 			os.Exit(1)
 		}
-		if *id == "" {
-			fmt.Fprintln(os.Stderr, "Error: --id is required")
+		id, listen, target := subArgs[0], subArgs[1], subArgs[2]
+		if !isValidIPPort(target) {
+			fmt.Fprintf(os.Stderr, "Error: invalid target %q (must be ip:port)\n", target)
 			os.Exit(1)
-		}
-		if *listen == "" && *target == "" {
-			fmt.Fprintln(os.Stderr, "Error: at least one of --listen or --target must be provided")
-			os.Exit(1)
-		}
-		if *target != "" {
-			if !isValidIPPort(*target) {
-				fmt.Fprintf(os.Stderr, "Error: invalid target %q (must be ip:port)\n", *target)
-				os.Exit(1)
-			}
 		}
 		found := false
 		for i := range cfg.PortMappings {
-			if cfg.PortMappings[i].ID == *id {
+			if cfg.PortMappings[i].ID == id {
 				found = true
-				if *listen != "" {
-					cfg.PortMappings[i].Listen = *listen
-				}
-				if *target != "" {
-					cfg.PortMappings[i].Target = *target
-				}
+				cfg.PortMappings[i].Listen = listen
+				cfg.PortMappings[i].Target = target
 				break
 			}
 		}
 		if !found {
-			fmt.Fprintf(os.Stderr, "Error: mapping with id %q not found\n", *id)
+			fmt.Fprintf(os.Stderr, "Error: mapping %q not found\n", id)
 			os.Exit(1)
 		}
 		if err := writeConfigYAML(cfgPath, &cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to write config: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Printf("Port mapping %q updated (restart server to apply)\n", *id)
+		fmt.Printf("Port mapping %q updated (%s -> %s, restart to apply)\n", id, listen, target)
 
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown mapping subcommand: %s\n", sub)
+		fmt.Fprintf(os.Stderr, "Unknown subcommand: %s. Use: list, add, rm, set\n", sub)
 		os.Exit(1)
 	}
 }

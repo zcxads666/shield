@@ -297,7 +297,7 @@ Type=simple
 User=shield
 Group=shield
 WorkingDirectory=/opt/shield
-ExecStart=/opt/shield/bin/shield -config /opt/shield/config.yaml start
+ExecStart=/opt/shield/bin/shield -c /opt/shield/config.yaml start
 ExecReload=/bin/kill -HUP \$MAINPID
 Restart=on-failure
 RestartSec=5
@@ -386,11 +386,12 @@ print_status() {
     fi
 
     echo "  CLI 管理:"
-    echo "    shield -config /opt/shield/config.yaml status"
-    echo "    shield -config /opt/shield/config.yaml stats"
-    echo "    shield -config /opt/shield/config.yaml logs --lines 50"
-    echo "    shield -config /opt/shield/config.yaml blacklist list"
-    echo "    shield -config /opt/shield/config.yaml mapping list"
+    echo "    shield -c /opt/shield/config.yaml status"
+    echo "    shield -c /opt/shield/config.yaml stats"
+    echo "    shield -c /opt/shield/config.yaml logs -n 50"
+    echo "    shield -c /opt/shield/config.yaml bl"
+    echo "    shield -c /opt/shield/config.yaml mp"
+    echo "    shield -c /opt/shield/config.yaml restart"
     echo ""
     echo "========================================"
 
