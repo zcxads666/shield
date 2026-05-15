@@ -101,35 +101,35 @@ func (wr *WaitingRoom) waitingPageHTML(sessionID, originalURL string, initialPos
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>排队等待中...</title>
+<title>排队等待中</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#667eea 0%%,#764ba2 100%%);color:#333}
-.card{background:#fff;padding:40px 48px;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.15);text-align:center;max-width:480px;width:90%%}
-.icon{width:64px;height:64px;margin:0 auto 20px;position:relative}
-.icon .circle{width:64px;height:64px;border:4px solid #e0e0e0;border-top-color:#667eea;border-radius:50%%;animation:spin 1.2s linear infinite}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f0f2f5;color:#333}
+.card{background:#fff;padding:40px 48px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.08);text-align:center;max-width:420px;width:90%%}
+.icon{width:40px;height:40px;margin:0 auto 24px}
+.icon svg{width:100%%;height:100%%;color:#1a1a1a;animation:spin 1.2s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-h1{font-size:22px;font-weight:600;margin-bottom:8px;color:#1a1a2e}
-.subtitle{font-size:14px;color:#888;margin-bottom:28px}
-.queue-info{background:#f8f9ff;border-radius:12px;padding:20px;margin-bottom:24px}
-.queue-position{font-size:48px;font-weight:700;color:#667eea;line-height:1}
-.queue-label{font-size:13px;color:#888;margin-top:4px}
-.queue-details{display:flex;justify-content:space-around;margin-top:16px;padding-top:16px;border-top:1px solid #eee}
+h1{font-size:20px;font-weight:600;margin-bottom:8px;color:#1a1a1a}
+.subtitle{font-size:14px;color:#666;margin-bottom:32px}
+.queue-info{background:#f7f8fa;border-radius:8px;padding:24px;margin-bottom:24px}
+.queue-position{font-size:42px;font-weight:700;color:#1a1a1a;line-height:1}
+.queue-label{font-size:13px;color:#888;margin-top:6px}
+.queue-details{display:flex;justify-content:space-around;margin-top:20px;padding-top:20px;border-top:1px solid #e8e8e8}
 .detail-item{text-align:center}
-.detail-value{font-size:20px;font-weight:600;color:#333}
-.detail-label{font-size:11px;color:#999;margin-top:2px}
+.detail-value{font-size:18px;font-weight:600;color:#333}
+.detail-label{font-size:12px;color:#999;margin-top:4px}
 .progress-container{margin-bottom:20px}
-.progress-bar{width:100%%;height:6px;background:#e8e8e8;border-radius:3px;overflow:hidden}
-.progress-fill{height:100%%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:3px;transition:width .5s ease;width:0%%}
-.status{font-size:13px;color:#888;margin-top:20px}
-.status .dot{display:inline-block;width:8px;height:8px;background:#4caf50;border-radius:50%%;margin-right:6px;animation:pulse 1.5s ease infinite}
+.progress-bar{width:100%%;height:4px;background:#e8e8e8;border-radius:2px;overflow:hidden}
+.progress-fill{height:100%%;background:#1a1a1a;border-radius:2px;transition:width .5s ease;width:0%%}
+.status{font-size:13px;color:#666;margin-top:20px;display:flex;align-items:center;justify-content:center;gap:6px}
+.status .dot{width:6px;height:6px;background:#22c55e;border-radius:50%%;animation:pulse 1.5s ease infinite}
 @keyframes pulse{0%%,100%%{opacity:1}50%%{opacity:.4}}
-.tips{font-size:12px;color:#bbb;margin-top:24px;line-height:1.6}
+.tips{font-size:12px;color:#aaa;margin-top:24px;line-height:1.6}
 </style>
 </head>
 <body>
 <div class="card">
-<div class="icon"><div class="circle"></div></div>
+<div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg></div>
 <h1>排队等待中</h1>
 <p class="subtitle">当前访问人数较多，请耐心等待</p>
 <div class="queue-info">
@@ -166,7 +166,7 @@ var pb=document.getElementById("progress");
 var st=document.getElementById("statusText");
 
 function update(p,est,qlen){
-pe.textContent=p>0?p:"排到了!";
+pe.textContent=p>0?p:"排到了";
 ee.textContent=est;
 qe.textContent=qlen;
 if(qlen>0&&p>0){
@@ -192,7 +192,7 @@ update(d.position,d.estimated,d.queue_length);
 });
 
 es.addEventListener("release",function(e){
-st.textContent="排到了! 正在跳转...";
+st.textContent="排到了，正在跳转...";
 setTimeout(function(){
 window.location.href=origURL+"?__shield_wr_release=1";
 },500);
